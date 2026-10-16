@@ -28,10 +28,9 @@ import javax.inject.Singleton
 @Singleton
 class ProjectRepository @Inject constructor(
     private val projectDao: ProjectDao,
-    private val slideDao: SlideDao,
-    private val json: com.aislide.studio.data.local.database.AppJson = AppJson
+    private val slideDao: SlideDao
 ) {
-    private val json get() = AppJson.default
+    private val json = AppJson.default
 
     fun observeAll(): Flow<List<Presentation>> =
         projectDao.observeAll().map { entities ->

@@ -6,13 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.aislide.studio.data.model.Slide
 import com.aislide.studio.data.model.SlideObject
 import com.aislide.studio.data.repository.ProjectRepository
+import com.aislide.studio.domain.usecase.AddSlideObjectUseCase
 import com.aislide.studio.domain.usecase.EditObjectWithAiUseCase
+import com.aislide.studio.domain.usecase.GenerateImageUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -20,7 +22,9 @@ import javax.inject.Inject
 class SlideEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val projectRepository: ProjectRepository,
-    private val editObjectUseCase: EditObjectWithAiUseCase
+    private val editObjectUseCase: EditObjectWithAiUseCase,
+    private val addSlideObjectUseCase: AddSlideObjectUseCase,
+    private val generateImageUseCase: GenerateImageUseCase
 ) : ViewModel() {
 
     val projectId: Long = savedStateHandle["projectId"] ?: 0L
@@ -41,19 +45,29 @@ class SlideEditorViewModel @Inject constructor(
     private val _aiExplanation = MutableStateFlow<String?>(null)
     val aiExplanation: StateFlow<String?> = _aiExplanation.asStateFlow()
 
+    private val _imageLoading = MutableStateFlow(false)
+    val imageLoading: StateFlow<Boolean> = _imageLoading.asStateFlow()
+
     init {
         loadSlide()
     }
 
     private fun loadSlide() {
         projectRepository.observeProject(projectId)
-            .onEach { pres ->
-                pres?.slides?.find { it.index == slideIndex }?.let { _slide.value = it }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+            .let { projectFlow ->
+                viewModelScope.launch {
+                    projectFlow.collect { pres ->
+                        pres?.slides?.find { it.index == slideIndex }?.let { _slide.value = it }
+                    }
+                }
             }
-            .launchIn(viewModelScope)
     }
 
     fun selectObject(id: String?) { _selectedObjectId.value = id }
+
+    val selectedObject: SlideObject?
+        get() = _slide.value?.objects?.find { it.id == _selectedObjectId.value }
 
     fun editObjectWithAi(instruction: String) {
         val slide = _slide.value ?: return
@@ -63,14 +77,50 @@ class SlideEditorViewModel @Inject constructor(
         _aiError.value = null
         viewModelScope.launch {
             editObjectUseCase(projectId, slide, target, instruction)
-                .onSuccess { explanation ->
-                    _aiExplanation.value = explanation
-                    // slide will reload via flow
-                }
-                .onFailure { e ->
-                    _aiError.value = e.message ?: "Error desconocido"
-                }
+                .onSuccess { explanation -> _aiExplanation.value = explanation }
+                .onFailure { e -> _aiError.value = e.message ?: "Error desconocido" }
             _aiLoading.value = false
+        }
+    }
+
+    fun addTextBox() {
+        viewModelScope.launch {
+            addSlideObjectUseCase(
+                projectId, slideIndex,
+                com.aislide.studio.data.model.ObjectType.TEXT_BOX,
+                text = "Texto nuevo"
+            )
+        }
+    }
+
+    fun addBulletList() {
+        viewModelScope.launch {
+            addSlideObjectUseCase(
+                projectId, slideIndex,
+                com.aislide.studio.data.model.ObjectType.BULLET_LIST,
+                bullets = listOf("Primer punto", "Segundo punto")
+            )
+        }
+    }
+
+    fun addImage(path: String) {
+        viewModelScope.launch {
+            addSlideObjectUseCase(
+                projectId, slideIndex,
+                com.aislide.studio.data.model.ObjectType.IMAGE,
+                imageUrl = path
+            )
+        }
+    }
+
+    fun generateImageForPrompt(prompt: String) {
+        _imageLoading.value = true
+        _aiError.value = null
+        viewModelScope.launch {
+            generateImageUseCase(prompt, slide?.id ?: "")
+                .onSuccess { path -> addImage(path) }
+                .onFailure { e -> _aiError.value = e.message ?: "Error al generar imagen" }
+            _imageLoading.value = false
         }
     }
 

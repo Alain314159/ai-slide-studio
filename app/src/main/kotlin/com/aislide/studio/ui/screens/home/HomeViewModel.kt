@@ -1,5 +1,6 @@
 package com.aislide.studio.ui.screens.home
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aislide.studio.data.model.Presentation
@@ -29,11 +30,11 @@ class HomeViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    fun importPptx(uri: android.net.Uri, title: String) {
+    fun importPptx(uri: Uri, defaultTitle: String) {
         viewModelScope.launch {
             _importing.value = true
             _error.value = null
-            importPptxUseCase(uri, title)
+            importPptxUseCase(uri, defaultTitle)
                 .onSuccess { _importing.value = false }
                 .onFailure { e ->
                     _error.value = e.message ?: "Error al importar"

@@ -30,7 +30,7 @@ class AiGenerateViewModel @Inject constructor(
         val promptValue = _prompt.value.trim()
         if (promptValue.isBlank()) return
         viewModelScope.launch {
-            _state.value = AiGenerateState.Loading
+            _state.value = AiGenerateState.Loading()
             generateUseCase(promptValue)
                 .onSuccess { projectId -> _state.value = AiGenerateState.Success(projectId) }
                 .onFailure { e ->

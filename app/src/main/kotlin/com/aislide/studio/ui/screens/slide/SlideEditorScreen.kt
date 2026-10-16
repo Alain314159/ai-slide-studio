@@ -336,33 +336,53 @@ private fun ObjectListItem(
         shape = RoundedCornerShape(8.dp),
         onClick = onClick
     ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Text(
-                when (obj.type) {
-                    com.aislide.studio.data.model.ObjectType.TITLE -> "Título"
-                    com.aislide.studio.data.model.ObjectType.SUBTITLE -> "Subtítulo"
-                    com.aislide.studio.data.model.ObjectType.TEXT_BOX -> "Caja de texto"
-                    com.aislide.studio.data.model.ObjectType.BULLET_LIST -> "Lista de bullets"
-                    com.aislide.studio.data.model.ObjectType.IMAGE -> "Imagen"
-                    com.aislide.studio.data.model.ObjectType.SHAPE_RECTANGLE -> "Rectángulo"
-                    com.aislide.studio.data.model.ObjectType.SHAPE_CIRCLE -> "Círculo"
-                    com.aislide.studio.data.model.ObjectType.SHAPE_ARROW -> "Flecha"
-                    com.aislide.studio.data.model.ObjectType.SHAPE_LINE -> "Línea"
-                    else -> obj.type.name
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                when {
-                    obj.text.isNotBlank() -> obj.text.take(40)
-                    obj.bullets.isNotEmpty() -> obj.bullets.firstOrNull().orEmpty().take(40)
-                    obj.imageUrl != null -> "Imagen local"
-                    else -> "(vacío)"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 2
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Image preview (if applicable) via Coil
+            if (obj.type == com.aislide.studio.data.model.ObjectType.IMAGE && obj.imageUrl != null) {
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .padding(end = 8.dp)
+                ) {
+                    coil.compose.AsyncImage(
+                        model = obj.imageUrl,
+                        contentDescription = "Preview",
+                        modifier = Modifier.size(40.dp),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    when (obj.type) {
+                        com.aislide.studio.data.model.ObjectType.TITLE -> "Título"
+                        com.aislide.studio.data.model.ObjectType.SUBTITLE -> "Subtítulo"
+                        com.aislide.studio.data.model.ObjectType.TEXT_BOX -> "Caja de texto"
+                        com.aislide.studio.data.model.ObjectType.BULLET_LIST -> "Lista de bullets"
+                        com.aislide.studio.data.model.ObjectType.IMAGE -> "Imagen"
+                        com.aislide.studio.data.model.ObjectType.SHAPE_RECTANGLE -> "Rectángulo"
+                        com.aislide.studio.data.model.ObjectType.SHAPE_CIRCLE -> "Círculo"
+                        com.aislide.studio.data.model.ObjectType.SHAPE_ARROW -> "Flecha"
+                        com.aislide.studio.data.model.ObjectType.SHAPE_LINE -> "Línea"
+                        else -> obj.type.name
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    when {
+                        obj.text.isNotBlank() -> obj.text.take(40)
+                        obj.bullets.isNotEmpty() -> obj.bullets.firstOrNull().orEmpty().take(40)
+                        obj.imageUrl != null -> "Imagen local"
+                        else -> "(vacío)"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2
+                )
+            }
         }
     }
 }

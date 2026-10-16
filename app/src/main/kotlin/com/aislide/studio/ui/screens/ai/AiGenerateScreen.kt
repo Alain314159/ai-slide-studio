@@ -3,11 +3,19 @@ package com.aislide.studio.ui.screens.ai
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -94,6 +102,19 @@ private fun IdleView(
     onGenerate: () -> Unit,
     modifier: Modifier
 ) {
+    val examplePrompts = remember {
+        listOf(
+            "Presentación sobre la fotosíntesis para 7mo grado, 8 slides, tono educativo con ejemplos de la vida real",
+            "Resumen de la Revolución Francesa, 10 slides, con cronología y causas principales",
+            "Introducción a la programación orientada a objetos, 12 slides, con ejemplos en Python",
+            "Beneficios de la actividad física, 6 slides, tono motivador, con datos científicos",
+            "Cultura maya: historia, matemáticas y astronomía, 10 slides",
+            "Energías renovables: ventajas y desafíos, 8 slides, con gráficos comparativos",
+            "Tutorial: cómo hacer una buena exposición oral, 7 slides",
+            "Impacto de las redes sociales en los jóvenes, 9 slides, tono reflexivo"
+        )
+    }
+
     Column(
         modifier = modifier.padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -110,6 +131,25 @@ private fun IdleView(
                 Text("Ej: Presentación sobre la fotosíntesis para 7mo grado, 8 slides, tono educativo con ejemplos de la vida real")
             }
         )
+
+        Text("O elige un ejemplo:", style = MaterialTheme.typography.bodyMedium)
+        // Horizontal scrollable list of example prompt chips
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(examplePrompts) { example ->
+                AssistChip(
+                    onClick = { onPromptChange(example) },
+                    label = { Text(example.take(40) + if (example.length > 40) "…" else "", style = MaterialTheme.typography.bodySmall) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
         Button(
             onClick = onGenerate,

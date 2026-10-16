@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand colors — AI Slide Studio -->
+    <color name="brand_primary">#5B6CFF</color>
+    <color name="brand_primary_dark">#3A47B5</color>
+    <color name="brand_accent">#FFC857</color>
+    <color name="brand_background">#0F1117</color>
+    <color name="brand_surface">#1A1D26</color>
+    <color name="brand_on_primary">#FFFFFF</color>
+    <color name="brand_on_background">#E8E9F0</color>
+    <color name="brand_on_surface">#E8E9F0</color>
+    <color name="brand_error">#FF5252</color>
+
+    <!-- Status bar (legacy, for splash) -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

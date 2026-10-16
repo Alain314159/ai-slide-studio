@@ -11,6 +11,7 @@ import com.aislide.studio.domain.service.HtmlSlideRenderer
 import com.aislide.studio.domain.usecase.AddSlideObjectUseCase
 import com.aislide.studio.domain.usecase.EditObjectWithAiUseCase
 import com.aislide.studio.domain.usecase.GenerateImageUseCase
+import com.aislide.studio.domain.usecase.UndoRedoUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,7 +28,8 @@ class SlideEditorViewModel @Inject constructor(
     private val htmlRenderer: HtmlSlideRenderer,
     private val editObjectUseCase: EditObjectWithAiUseCase,
     private val addSlideObjectUseCase: AddSlideObjectUseCase,
-    private val generateImageUseCase: GenerateImageUseCase
+    private val generateImageUseCase: GenerateImageUseCase,
+    private val undoRedoUseCase: UndoRedoUseCase
 ) : ViewModel() {
 
     val projectId: Long = savedStateHandle["projectId"] ?: 0L
@@ -131,4 +133,23 @@ class SlideEditorViewModel @Inject constructor(
 
     fun clearExplanation() { _aiExplanation.value = null }
     fun clearError() { _aiError.value = null }
+
+    fun undo() {
+        val current = _slide.value ?: return
+        viewModelScope.launch {
+            undoRedoUseCase.undo(projectId, current)
+                .onFailure { e -> _aiError.value = "Undo: ${e.message}" }
+        }
+    }
+
+    fun redo() {
+        val current = _slide.value ?: return
+        viewModelScope.launch {
+            undoRedoUseCase.redo(projectId, current)
+                .onFailure { e -> _aiError.value = "Redo: ${e.message}" }
+        }
+    }
+
+    val canUndo: Boolean get() = _slide.value?.let { undoRedoUseCase.canUndo(it.id) } ?: false
+    val canRedo: Boolean get() = _slide.value?.let { undoRedoUseCase.canRedo(it.id) } ?: false
 }

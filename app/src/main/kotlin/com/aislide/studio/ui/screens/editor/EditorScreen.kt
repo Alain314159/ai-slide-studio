@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
+import com.aislide.studio.ui.components.SlideThumbnail
 import com.aislide.studio.ui.navigation.Routes
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +100,7 @@ fun EditorScreenRoute(
                 SlideCardRow(
                     slideIndex = slide.index,
                     slideTitle = slide.title.ifBlank { "Slide ${slide.index + 1}" },
+                    thumbnailHtml = viewModel.renderThumbnail(slide.index),
                     onClick = { navController.navigate(Routes.slideEditor(projectId, slide.index)) },
                     onDelete = { viewModel.deleteSlide(slide.index) }
                 )
@@ -110,6 +113,7 @@ fun EditorScreenRoute(
 private fun SlideCardRow(
     slideIndex: Int,
     slideTitle: String,
+    thumbnailHtml: String,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -118,13 +122,22 @@ private fun SlideCardRow(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("${slideIndex + 1}", style = MaterialTheme.typography.titleLarge)
+            // Thumbnail (small WebView) — fixed width so the row doesn't reflow
+            if (thumbnailHtml.isNotBlank()) {
+                SlideThumbnail(
+                    html = thumbnailHtml,
+                    modifier = Modifier.size(width = 160.dp, height = 90.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                slideTitle,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text("${slideIndex + 1}", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    slideTitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 2
+                )
+            }
             IconButton(onClick = onClick) { Icon(Icons.Default.Edit, contentDescription = "Editar") }
             IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Eliminar") }
         }

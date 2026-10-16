@@ -24,8 +24,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -85,6 +87,14 @@ fun SlideEditorScreenRoute(
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = viewModel::undo, enabled = viewModel.canUndo) {
+                        Icon(Icons.Default.Undo, contentDescription = "Deshacer")
+                    }
+                    IconButton(onClick = viewModel::redo, enabled = viewModel.canRedo) {
+                        Icon(Icons.Default.Redo, contentDescription = "Rehacer")
                     }
                 }
             )

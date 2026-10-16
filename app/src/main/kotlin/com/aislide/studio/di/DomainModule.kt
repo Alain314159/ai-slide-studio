@@ -34,13 +34,14 @@ object DomainModule {
 
     @Provides @Singleton
     fun provideEditObjectWithAiUseCase(
-        llm: LlmRepository, repo: ProjectRepository, renderer: HtmlSlideRenderer
-    ) = EditObjectWithAiUseCase(llm, repo, renderer)
+        llm: LlmRepository, repo: ProjectRepository, renderer: HtmlSlideRenderer,
+        history: com.aislide.studio.domain.service.SlideHistoryManager
+    ) = EditObjectWithAiUseCase(llm, repo, renderer, history)
 
     @Provides @Singleton
     fun provideAddSlideObjectUseCase(
-        repo: ProjectRepository, renderer: HtmlSlideRenderer
-    ) = AddSlideObjectUseCase(repo, renderer)
+        repo: ProjectRepository, renderer: HtmlSlideRenderer, history: com.aislide.studio.domain.service.SlideHistoryManager
+    ) = AddSlideObjectUseCase(repo, renderer, history)
 
     @Provides @Singleton
     fun provideExportToPptxUseCase(
@@ -65,4 +66,14 @@ object DomainModule {
         repo: ProjectRepository, renderer: HtmlSlideRenderer,
         @dagger.hilt.android.qualifiers.ApplicationContext ctx: android.content.Context
     ) = ImportPptxUseCase(repo, renderer, ctx)
+
+    @Provides @Singleton
+    fun provideSlideHistoryManager() = com.aislide.studio.domain.service.SlideHistoryManager()
+
+    @Provides @Singleton
+    fun provideUndoRedoUseCase(
+        repo: ProjectRepository,
+        renderer: HtmlSlideRenderer,
+        history: com.aislide.studio.domain.service.SlideHistoryManager
+    ) = com.aislide.studio.domain.usecase.UndoRedoUseCase(repo, renderer, history)
 }

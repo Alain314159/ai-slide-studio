@@ -8,6 +8,7 @@ import com.aislide.studio.data.remote.dto.ObjectEditResultDto
 import com.aislide.studio.data.repository.LlmRepository
 import com.aislide.studio.data.repository.ProjectRepository
 import com.aislide.studio.domain.service.HtmlSlideRenderer
+import com.aislide.studio.domain.service.SlideHistoryManager
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,32 +16,31 @@ import javax.inject.Singleton
  * Edits ONE slide object with AI — the user's central feature request.
  *
  * The user taps an object on the slide and writes what they want changed.
- * This use case calls the LLM constrained to ONLY modify that object,
- * applies the result, re-renders the slide's HTML, and persists.
+ * This use case:
+ *   1. Snapshots the current slide (for undo)
+ *   2. Calls the LLM constrained to ONLY modify that object
+ *   3. Applies the result
+ *   4. Re-renders the slide's HTML
+ *   5. Persists
  */
 @Singleton
 class EditObjectWithAiUseCase @Inject constructor(
     private val llmRepository: LlmRepository,
     private val projectRepository: ProjectRepository,
-    private val htmlRenderer: HtmlSlideRenderer
+    private val htmlRenderer: HtmlSlideRenderer,
+    private val history: SlideHistoryManager
 ) {
-    /**
-     * @param projectId   The project the slide belongs to
-     * @param slide        The current slide (full context for the LLM)
-     * @param target       The specific object the user selected
-     * @param instruction  Free-text instruction in natural language
-     * @return Result with the explanation string from the LLM
-     */
     suspend operator fun invoke(
         projectId: Long,
         slide: Slide,
         target: SlideObject,
         instruction: String
     ): Result<String> = runCatching {
+        // Snapshot for undo
+        history.get(slide.id).push(slide)
+
         // Serialize the target object for the LLM
         val objectJson = AppJson.default.encodeToString(SlideObject.serializer(), target)
-
-        // Provide context: which slide, what layout, what title
         val slideContext = "Slide ${slide.index + 1}, layout=${slide.layout}, title=\"${slide.title}\""
 
         // Call the LLM — constrained to ONLY modify the targeted object
@@ -57,7 +57,7 @@ class EditObjectWithAiUseCase @Inject constructor(
         val updatedObjects = slide.objects.map { if (it.id == target.id) updated else it }
         val updatedSlide = slide.copy(
             objects = updatedObjects,
-            htmlContent = htmlRenderer.render(slide.copy(objects = updatedObjects), project.palette, project.typography)
+            htmlContent = htmlRenderer.render(slide.copy(objects = updatedObjects), project.palette, project.typography, interactive = true)
         )
 
         // Persist

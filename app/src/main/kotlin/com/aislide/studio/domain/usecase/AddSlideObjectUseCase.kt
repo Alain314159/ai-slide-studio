@@ -3,19 +3,19 @@ package com.aislide.studio.domain.usecase
 import com.aislide.studio.data.model.SlideObject
 import com.aislide.studio.data.repository.ProjectRepository
 import com.aislide.studio.domain.service.HtmlSlideRenderer
+import com.aislide.studio.domain.service.SlideHistoryManager
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Adds an object to a slide. Used by the manual editor's "add text box",
- * "add image", "add shape" buttons, and by the AI generation flow to populate
- * slides with placeholders the user can later edit.
+ * Adds an object to a slide. Snapshots state first for undo.
  */
 @Singleton
 class AddSlideObjectUseCase @Inject constructor(
     private val projectRepository: ProjectRepository,
-    private val htmlRenderer: HtmlSlideRenderer
+    private val htmlRenderer: HtmlSlideRenderer,
+    private val history: SlideHistoryManager
 ) {
     suspend operator fun invoke(
         projectId: Long,
@@ -29,6 +29,9 @@ class AddSlideObjectUseCase @Inject constructor(
             ?: error("Project not found: $projectId")
         val slide = project.slides.find { it.index == slideIndex }
             ?: error("Slide not found: $slideIndex")
+
+        // Snapshot for undo
+        history.get(slide.id).push(slide)
 
         val newObj = SlideObject(
             id = UUID.randomUUID().toString(),
@@ -49,7 +52,8 @@ class AddSlideObjectUseCase @Inject constructor(
             htmlContent = htmlRenderer.render(
                 slide.copy(objects = slide.objects + newObj),
                 project.palette,
-                project.typography
+                project.typography,
+                interactive = true
             )
         )
         projectRepository.updateSlide(projectId, slideIndex, updatedSlide)

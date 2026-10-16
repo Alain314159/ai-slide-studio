@@ -31,6 +31,15 @@ class EditorViewModel @Inject constructor(
     val presentation: StateFlow<Presentation?> = projectRepository.observeProject(projectId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    /**
+     * Returns non-interactive HTML for the given slide, suitable for a thumbnail WebView.
+     */
+    fun renderThumbnail(slideIndex: Int): String {
+        val pres = presentation.value ?: return ""
+        val slide = pres.slides.getOrNull(slideIndex) ?: return ""
+        return htmlRenderer.render(slide, pres.palette, pres.typography, interactive = false)
+    }
+
     fun addSlide() {
         viewModelScope.launch {
             val pres = presentation.value ?: return@launch

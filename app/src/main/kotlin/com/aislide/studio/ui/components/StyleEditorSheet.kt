@@ -132,6 +132,11 @@ fun StyleEditorSheet(
                 selected = textColor,
                 onSelected = { textColor = it }
             )
+            HexTextField(
+                hex = textColor,
+                onHexChange = { textColor = it },
+                label = "HEX del texto"
+            )
 
             // Background color (toggle + picker)
             Row(
@@ -149,6 +154,11 @@ fun StyleEditorSheet(
                 ColorRow(
                     selected = bgColor,
                     onSelected = { bgColor = it }
+                )
+                HexTextField(
+                    hex = bgColor,
+                    onHexChange = { bgColor = it },
+                    label = "HEX del fondo"
                 )
             }
 
@@ -231,4 +241,35 @@ private fun ColorRow(
             }
         }
     }
+}
+
+/**
+ * Text field for entering a custom HEX color (e.g. "#FF5722").
+ * Validates as you type; on blur, normalizes to #RRGGBB.
+ */
+@Composable
+private fun HexTextField(
+    hex: String,
+    onHexChange: (String) -> Unit,
+    label: String
+) {
+    var text by remember(hex) { mutableStateOf(hex.removePrefix("#")) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { newValue ->
+            // Filter to hex chars only (0-9, A-F after uppercase), max 6 chars
+            val filtered = newValue.uppercase().filter { c -> c.isDigit() || c in 'A'..'F' }.take(6)
+            text = filtered
+            if (filtered.length == 6 || filtered.length == 3) {
+                onHexChange("#$filtered")
+            } else if (filtered.isEmpty()) {
+                onHexChange("#000000")
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        label = { Text(label) },
+        prefix = { Text("#") },
+        isError = text.length != 6 && text.length != 3
+    )
 }

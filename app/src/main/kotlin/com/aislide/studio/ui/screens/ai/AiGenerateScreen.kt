@@ -32,6 +32,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -102,7 +105,7 @@ private fun IdleView(
     onGenerate: () -> Unit,
     modifier: Modifier
 ) {
-    val examplePrompts = remember {
+    val examplePrompts: List<String> = remember {
         listOf(
             "Presentación sobre la fotosíntesis para 7mo grado, 8 slides, tono educativo con ejemplos de la vida real",
             "Resumen de la Revolución Francesa, 10 slides, con cronología y causas principales",
@@ -138,7 +141,7 @@ private fun IdleView(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(examplePrompts) { example ->
+            items(items = examplePrompts) { example: String ->
                 AssistChip(
                     onClick = { onPromptChange(example) },
                     label = { Text(example.take(40) + if (example.length > 40) "…" else "", style = MaterialTheme.typography.bodySmall) },

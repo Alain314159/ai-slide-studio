@@ -164,12 +164,12 @@ class HistoryManagerTest {
         // Push states 1..4, current is 5
         states.dropLast(1).forEach { history.push(it) }
 
-        var current = states.last()
-        assertEquals(states[3], history.undo(current).also { current = it })
-        assertEquals(states[2], history.undo(current).also { current = it })
-        assertEquals(states[1], history.undo(current).also { current = it })
-        assertEquals(states[0], history.undo(current).also { current = it })
+        var current: Slide? = states.last()
+        assertEquals(states[3], history.undo(current!!).also { current = it })
+        assertEquals(states[2], history.undo(current!!).also { current = it })
+        assertEquals(states[1], history.undo(current!!).also { current = it })
+        assertEquals(states[0], history.undo(current!!).also { current = it })
         // No more
-        assertNull(history.undo(current))
+        assertNull(history.undo(current!!))
     }
 }

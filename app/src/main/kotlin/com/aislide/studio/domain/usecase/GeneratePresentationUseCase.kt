@@ -72,7 +72,7 @@ class GeneratePresentationUseCase @Inject constructor(
                 title = slideDto.title,
                 subtitle = slideDto.subtitle,
                 objects = buildObjectsForLayout(layout, slideDto),
-                notesForSpeaker = slideDto.notesForSpeaker
+                notesForSpeaker = slideDto.notesForSpeaker ?: ""
             )
         }
         return Presentation(

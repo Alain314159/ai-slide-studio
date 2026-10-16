@@ -14,6 +14,7 @@ import com.aislide.studio.data.model.SlideObject
 import com.aislide.studio.data.model.Typography
 import com.aislide.studio.data.repository.ProjectRepository
 import com.aislide.studio.domain.service.HtmlSlideRenderer
+import com.aislide.studio.domain.service.PptxZipWriter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

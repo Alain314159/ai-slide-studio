@@ -25,7 +25,13 @@ object DomainModule {
     fun provideHtmlSlideRenderer(): HtmlSlideRenderer = HtmlSlideRenderer()
 
     @Provides @Singleton
-    fun providePptxExportEngine(): PptxExportEngine = PptxExportEngine()
+    fun providePptxZipWriter(): com.aislide.studio.domain.service.PptxZipWriter =
+        com.aislide.studio.domain.service.PptxZipWriter()
+
+    @Provides @Singleton
+    fun providePptxExportEngine(
+        zipWriter: com.aislide.studio.domain.service.PptxZipWriter
+    ): PptxExportEngine = PptxExportEngine(zipWriter)
 
     @Provides @Singleton
     fun provideGeneratePresentationUseCase(
@@ -52,8 +58,9 @@ object DomainModule {
     @Provides @Singleton
     fun provideExportToPptxVectorUseCase(
         repo: ProjectRepository, renderer: HtmlSlideRenderer,
+        zipWriter: com.aislide.studio.domain.service.PptxZipWriter,
         @dagger.hilt.android.qualifiers.ApplicationContext ctx: android.content.Context
-    ) = ExportToPptxVectorUseCase(repo, renderer, ctx)
+    ) = ExportToPptxVectorUseCase(repo, renderer, zipWriter, ctx)
 
     @Provides @Singleton
     fun provideGenerateImageUseCase(

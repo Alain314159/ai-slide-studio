@@ -16,6 +16,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -57,7 +60,8 @@ enum class ExportMode(val label: String, val description: String) {
 @HiltViewModel
 class ExportViewModel @Inject constructor(
     private val exportEditable: ExportToPptxUseCase,
-    private val exportVisual: ExportToPptxVectorUseCase
+    private val exportVisual: ExportToPptxVectorUseCase,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ExportState>(ExportState.Idle)
@@ -66,12 +70,24 @@ class ExportViewModel @Inject constructor(
     fun export(projectId: Long, mode: ExportMode, outputUri: Uri, fileName: String) {
         viewModelScope.launch {
             _state.value = ExportState.Loading
+            // Resolve the actual file URI from the directory tree
+            val tree = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, outputUri)
+            val existing = tree?.findFile("$fileName.pptx")
+            existing?.delete()
+            val target = tree?.createFile(
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "$fileName.pptx"
+            )
+            if (target == null) {
+                _state.value = ExportState.Error("No se pudo crear el archivo")
+                return@launch
+            }
             val result = when (mode) {
-                ExportMode.EDITABLE -> exportEditable(projectId, outputUri, fileName)
-                ExportMode.VISUAL -> exportVisual(projectId, outputUri, fileName)
+                ExportMode.EDITABLE -> exportEditable(projectId, target.uri, fileName)
+                ExportMode.VISUAL -> exportVisual(projectId, target.uri, fileName)
             }
             _state.value = result.fold(
-                onSuccess = { bytes -> ExportState.Success(bytes) },
+                onSuccess = { bytes -> ExportState.Success(bytes, target.uri) },
                 onFailure = { e -> ExportState.Error(e.message ?: "Error desconocido") }
             )
         }
@@ -83,7 +99,7 @@ class ExportViewModel @Inject constructor(
 sealed interface ExportState {
     data object Idle : ExportState
     data object Loading : ExportState
-    data class Success(val sizeBytes: Long) : ExportState
+    data class Success(val sizeBytes: Long, val fileUri: Uri) : ExportState
     data class Error(val message: String) : ExportState
 }
 
@@ -104,11 +120,23 @@ fun ExportScreenRoute(
     ) { uri ->
         if (uri != null) {
             selectedTreeUri = uri
-            // Persist permission so we can write later
             val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                 android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             navController.context.applicationContext.contentResolver.takePersistableUriPermission(uri, flags)
         }
+    }
+
+    fun sharePptx(uri: Uri) {
+        val ctx = navController.context
+        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = android.content.Intent.createChooser(shareIntent, "Compartir presentación").apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        ctx.startActivity(chooser)
     }
 
     Scaffold(
@@ -210,6 +238,14 @@ fun ExportScreenRoute(
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.padding(8.dp)
                     )
+                    Button(
+                        onClick = { sharePptx(s.fileUri) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null)
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        Text("Compartir")
+                    }
                     Button(onClick = { navController.popBackStack() }, modifier = Modifier.fillMaxWidth()) {
                         Text("Hecho")
                     }

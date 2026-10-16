@@ -64,7 +64,7 @@ class ExportToPptxVectorUseCase @Inject constructor(
 
             // Build the .pptx with each slide as a full-bleed picture
             val pptxBytes = XMLSlideShow().use { ppt ->
-                ppt.slideSize.setSize(
+                ppt.pageSize = java.awt.Dimension(
                     PptxExportEngine.SLIDE_WIDTH_EMU,
                     PptxExportEngine.SLIDE_HEIGHT_EMU
                 )

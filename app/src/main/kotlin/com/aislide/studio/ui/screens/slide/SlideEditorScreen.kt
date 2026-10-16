@@ -310,7 +310,7 @@ fun SlideEditorScreenRoute(
 
     // === Style editor bottom sheet ===
     if (showStyleSheet) {
-        val target = slide.value?.objects?.find { it.id == selectedObjId }
+        val target = slide?.objects?.find { it.id == selectedObjId }
         if (target != null) {
             StyleEditorSheet(
                 initialStyle = target.style,

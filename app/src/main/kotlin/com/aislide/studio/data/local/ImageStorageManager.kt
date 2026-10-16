@@ -88,17 +88,16 @@ class ImageStorageManager @Inject constructor(
      * Returns the total size in bytes used by all stored images.
      */
     fun totalSize(): Long {
-        return (generatedDir.listFiles().orEmpty() +
-                importedDir.listFiles().orEmpty() +
-                uploadedDir.listFiles().orEmpty()).sumOf { it.length() }
+        return listOf(generatedDir, importedDir, uploadedDir)
+            .flatMap { it.listFiles().orEmpty().asList() }
+            .sumOf { it.length() }
     }
 
     /**
      * Lists all stored image paths (used for cleanup tools or migration).
      */
     fun allFiles(): List<File> {
-        return (generatedDir.listFiles().orEmpty() +
-                importedDir.listFiles().orEmpty() +
-                uploadedDir.listFiles().orEmpty()).toList()
+        return listOf(generatedDir, importedDir, uploadedDir)
+            .flatMap { it.listFiles().orEmpty().asList() }
     }
 }

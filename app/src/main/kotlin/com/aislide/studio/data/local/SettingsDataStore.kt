@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.string
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.aislide.studio.data.remote.LlmProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -49,9 +49,9 @@ class SettingsDataStore @Inject constructor(
     }
 
     companion object {
-        private val KEY_API_KEY = string("api_key")
-        private val KEY_PROVIDER_ID = string("provider_id")
-        private val KEY_ENDPOINT = string("endpoint")
-        private val KEY_MODEL = string("model")
+        private val KEY_API_KEY = stringPreferencesKey("api_key")
+        private val KEY_PROVIDER_ID = stringPreferencesKey("provider_id")
+        private val KEY_ENDPOINT = stringPreferencesKey("endpoint")
+        private val KEY_MODEL = stringPreferencesKey("model")
     }
 }

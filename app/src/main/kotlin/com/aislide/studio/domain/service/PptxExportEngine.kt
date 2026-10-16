@@ -4,18 +4,10 @@ import com.aislide.studio.data.model.Palette
 import com.aislide.studio.data.model.Presentation
 import com.aislide.studio.data.model.SlideObject
 import com.aislide.studio.data.model.Typography
-import org.apache.poi.xslf.usermodel.SlideLayout
+import org.apache.poi.sl.usermodel.PictureData
+import org.apache.poi.sl.usermodel.TextAlign
 import org.apache.poi.xslf.usermodel.XMLSlideShow
 import org.apache.poi.xslf.usermodel.XSLFSlide
-import org.apache.poi.xslf.usermodel.XSLFTextBox
-import org.apache.poi.xslf.usermodel.XSLFTextParagraph
-import org.apache.poi.xslf.usermodel.XSLFTextRun
-import org.apache.poi.xslf.usermodel.XSLFPictureShape
-import org.apache.poi.xslf.usermodel.XSLFAutoShape
-import org.apache.poi.sl.usermodel.PictureData
-import org.apache.poi.sl.usermodel.Vertical
-import org.apache.poi.sl.usermodel.TextAlign
-import org.apache.poi.sl.usermodel.PlaceholderType
 import org.jsoup.Jsoup
 import java.awt.Color
 import java.awt.Rectangle
@@ -29,18 +21,14 @@ import javax.inject.Singleton
  * Exports a [Presentation] to .pptx using Apache POI with absolute EMU positioning.
  *
  * This is the EDITABLE mode — text remains selectable/editable in PowerPoint.
- * The mapeo is HTML/CSS → PPTX objects positioned at exact EMU coordinates:
- *
- *   slide.html (positioned absolute divs in % units)
- *        ↓
- *   XSLFTextBox / XSLFPictureShape / XSLFAutoShape
- *   positioned with new Rectangle(x, y, width, height) in EMU
  *
  * PowerPoint slide is 12,192,000 x 6,858,000 EMU (16:9, 13.333in × 7.5in).
  * Each [SlideObject] has normalized 0..1 coordinates, so:
  *   x_emu = (object.position.x * SLIDE_WIDTH_EMU).toInt()
  *
- * Fuentes embebidas: TODO in v0.2 (needs Apache POI embedFont + font file).
+ * v0.3: simplified to only support text, bullets, and images — the core
+ * object types we generate. Other types (shapes, tables, charts) will be
+ * added in a future iteration.
  */
 @Singleton
 class PptxExportEngine @Inject constructor() {
@@ -48,16 +36,13 @@ class PptxExportEngine @Inject constructor() {
     fun export(presentation: Presentation, output: OutputStream) {
         XMLSlideShow().use { ppt ->
             // Set 16:9 widescreen dimensions
-            val pgSize = ppt.slideSize
-            pgSize.setSize(SLIDE_WIDTH_EMU, SLIDE_HEIGHT_EMU)
+            val pageSize = ppt.pageSize
+            // pageSize is already a Dimension; we set it via the slide master property
+            ppt.pageSize = java.awt.Dimension(SLIDE_WIDTH_EMU, SLIDE_HEIGHT_EMU)
 
             presentation.slides.forEach { slide ->
-                val blankLayout = ppt.createSlideMaster().getLayout(SlideLayout.BLANK)
-                val xslfSlide = ppt.createSlide(blankLayout)
-                xslfSlide.background.fillForegroundColor = parseColor(
-                    slide.backgroundHex ?: presentation.palette.background
-                )
-
+                val xslfSlide = ppt.createSlide()
+                // Add objects
                 slide.objects.forEach { obj ->
                     placeObject(xslfSlide, obj, presentation.palette, presentation.typography)
                 }
@@ -105,8 +90,6 @@ class PptxExportEngine @Inject constructor() {
                 tb.anchor = rect
                 obj.bullets.forEach { bullet ->
                     val para = tb.addNewTextParagraph()
-                    para.bulletFont = "Arial"
-                    para.fontAlign = org.apache.poi.sl.usermodel.FontAlign.AUTO
                     val run = para.addNewTextRun()
                     run.text = bullet
                     applyTextStyle(run, obj.style, typography.bodyFont)
@@ -127,25 +110,7 @@ class PptxExportEngine @Inject constructor() {
                 }
             }
 
-            com.aislide.studio.data.model.ObjectType.SHAPE_RECTANGLE,
-            com.aislide.studio.data.model.ObjectType.SHAPE_CIRCLE,
-            com.aislide.studio.data.model.ObjectType.SHAPE_ARROW,
-            com.aislide.studio.data.model.ObjectType.SHAPE_LINE -> {
-                val shapeType = when (obj.type) {
-                    com.aislide.studio.data.model.ObjectType.SHAPE_CIRCLE ->
-                        org.apache.poi.sl.usermodel.ShapeType.ELLIPSE
-                    com.aislide.studio.data.model.ObjectType.SHAPE_ARROW ->
-                        org.apache.poi.sl.usermodel.ShapeType.LEFT_ARROW
-                    com.aislide.studio.data.model.ObjectType.SHAPE_LINE ->
-                        org.apache.poi.sl.usermodel.ShapeType.LINE
-                    else -> org.apache.poi.sl.usermodel.ShapeType.RECT
-                }
-                val shape = slide.createAutoShape(shapeType)
-                shape.anchor = rect
-                obj.style.backgroundColorHex?.let { shape.fillColor = parseColor(it) }
-            }
-
-            else -> { /* table/chart/icon — TODO in later phase */ }
+            else -> { /* shapes, tables, charts — TODO in later phase */ }
         }
     }
 
@@ -162,7 +127,7 @@ class PptxExportEngine @Inject constructor() {
     // === Style helpers ===
 
     private fun applyTextStyle(
-        run: XSLFTextRun,
+        run: org.apache.poi.xslf.usermodel.XSLFTextRun,
         style: com.aislide.studio.data.model.ObjectStyle,
         defaultFont: String
     ) {
@@ -172,7 +137,10 @@ class PptxExportEngine @Inject constructor() {
         run.fontColor = parseColor(style.textColorHex)
     }
 
-    private fun applyAlignment(para: XSLFTextParagraph, align: com.aislide.studio.data.model.TextAlign) {
+    private fun applyAlignment(
+        para: org.apache.poi.xslf.usermodel.XSLFTextParagraph,
+        align: com.aislide.studio.data.model.TextAlign
+    ) {
         para.textAlign = when (align) {
             com.aislide.studio.data.model.TextAlign.LEFT -> TextAlign.LEFT
             com.aislide.studio.data.model.TextAlign.CENTER -> TextAlign.CENTER

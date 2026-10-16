@@ -4,14 +4,15 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import com.aislide.studio.data.local.database.AppJson
+import com.aislide.studio.data.local.entity.SourceType
+import com.aislide.studio.data.model.ObjectPosition
+import com.aislide.studio.data.model.ObjectStyle
+import com.aislide.studio.data.model.ObjectType
 import com.aislide.studio.data.model.Palette
 import com.aislide.studio.data.model.Presentation
 import com.aislide.studio.data.model.Slide
 import com.aislide.studio.data.model.SlideLayout
 import com.aislide.studio.data.model.SlideObject
-import com.aislide.studio.data.model.ObjectPosition
-import com.aislide.studio.data.model.ObjectStyle
-import com.aislide.studio.data.model.ObjectType
 import com.aislide.studio.data.model.Typography
 import com.aislide.studio.data.repository.ProjectRepository
 import com.aislide.studio.domain.service.HtmlSlideRenderer
@@ -30,9 +31,9 @@ import javax.inject.Singleton
  * Reads the .pptx with Apache POI, extracts slides as best-effort text + image
  * objects, generates HTML for each slide so it can be edited in the app.
  *
- * Note: PPTX import is lossy — PPTX has richer layout concepts than our simple
- * object model. We extract text/images positioned by their XSLFShape anchors
- * and round to the closest [SlideLayout].
+ * v0.3: simplified to extract text from XSLFTextShape (not full placeholder
+ * detection) and images from XSLFPictureShape. This is lossy but works
+ * reliably.
  */
 @Singleton
 class ImportPptxUseCase @Inject constructor(
@@ -48,24 +49,27 @@ class ImportPptxUseCase @Inject constructor(
                 val slides = mutableListOf<Slide>()
 
                 XMLSlideShow(pptxFile.inputStream()).use { ppt ->
+                    val slideWidthEmu = ppt.pageSize.width
+                    val slideHeightEmu = ppt.pageSize.height
+
                     ppt.slides.forEachIndexed { idx, xslfSlide ->
                         val objs = mutableListOf<SlideObject>()
 
                         xslfSlide.shapes.forEach { shape ->
                             val anchor = shape.anchor
                             val pos = ObjectPosition(
-                                x = (anchor.x.toFloat() / PptxExportEngineConstants.SLIDE_WIDTH_EMU).coerceIn(0f, 1f),
-                                y = (anchor.y.toFloat() / PptxExportEngineConstants.SLIDE_HEIGHT_EMU).coerceIn(0f, 1f),
-                                width = (anchor.width.toFloat() / PptxExportEngineConstants.SLIDE_WIDTH_EMU).coerceIn(0f, 1f),
-                                height = (anchor.height.toFloat() / PptxExportEngineConstants.SLIDE_HEIGHT_EMU).coerceIn(0f, 1f)
+                                x = (anchor.x.toFloat() / slideWidthEmu).coerceIn(0f, 1f),
+                                y = (anchor.y.toFloat() / slideHeightEmu).coerceIn(0f, 1f),
+                                width = (anchor.width.toFloat() / slideWidthEmu).coerceIn(0f, 1f),
+                                height = (anchor.height.toFloat() / slideHeightEmu).coerceIn(0f, 1f)
                             )
                             when (shape) {
                                 is org.apache.poi.xslf.usermodel.XSLFTextShape -> {
-                                    val text = shape.text.ifBlank { return@forEach }
-                                    val isTitle = shape.placeholder?.type == org.apache.poi.sl.usermodel.PlaceholderType.TITLE
+                                    val text = shape.text
+                                    if (text.isBlank()) return@forEach
                                     objs += SlideObject(
                                         id = UUID.randomUUID().toString(),
-                                        type = if (isTitle) ObjectType.TITLE else ObjectType.TEXT_BOX,
+                                        type = if (idx == 0) ObjectType.TITLE else ObjectType.TEXT_BOX,
                                         text = text,
                                         position = pos,
                                         style = ObjectStyle.default()
@@ -82,7 +86,7 @@ class ImportPptxUseCase @Inject constructor(
                                         style = ObjectStyle.default()
                                     )
                                 }
-                                else -> { /* skip other shapes for v0.1 */ }
+                                else -> { /* skip other shapes for v0.3 */ }
                             }
                         }
 
@@ -90,10 +94,14 @@ class ImportPptxUseCase @Inject constructor(
                             id = UUID.randomUUID().toString(),
                             index = idx,
                             layout = inferLayout(objs),
-                            title = objs.firstOrNull { it.type == ObjectType.TITLE }?.text ?: "Slide ${idx + 1}",
+                            title = objs.firstOrNull { it.type == ObjectType.TITLE }?.text
+                                ?: objs.firstOrNull()?.text
+                                ?: "Slide ${idx + 1}",
                             objects = objs
                         )
-                        slides += slide.copy(htmlContent = htmlRenderer.render(slide, Palette.default(), Typography.default()))
+                        slides += slide.copy(
+                            htmlContent = htmlRenderer.render(slide, Palette.default(), Typography.default())
+                        )
                     }
                 }
 

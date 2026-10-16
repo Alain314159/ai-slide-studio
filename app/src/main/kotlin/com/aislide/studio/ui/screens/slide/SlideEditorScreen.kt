@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Redo
@@ -57,6 +58,7 @@ import androidx.navigation.NavHostController
 import com.aislide.studio.data.model.SlideObject
 import com.aislide.studio.domain.service.HtmlSlideRenderer
 import com.aislide.studio.domain.service.ObjectSelectionBridge
+import com.aislide.studio.ui.components.StyleEditorSheet
 
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,6 +78,7 @@ fun SlideEditorScreenRoute(
 
     var showAiSheet by remember { mutableStateOf(false) }
     var showImageSheet by remember { mutableStateOf(false) }
+    var showStyleSheet by remember { mutableStateOf(false) }
     var aiInstruction by remember { mutableStateOf("") }
     var imagePrompt by remember { mutableStateOf("") }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
@@ -213,6 +216,15 @@ fun SlideEditorScreenRoute(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Editar con IA")
                     }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = { showStyleSheet = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Brush, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Estilo")
+                    }
                     IconButton(onClick = { viewModel.selectObject(null) }, modifier = Modifier.align(Alignment.End)) {
                         Icon(Icons.Default.Close, contentDescription = "Quitar selección")
                     }
@@ -284,6 +296,20 @@ fun SlideEditorScreenRoute(
                     Text("Generar")
                 }
             }
+        }
+    }
+
+    // === Style editor bottom sheet ===
+    if (showStyleSheet) {
+        val target = slide.value?.objects?.find { it.id == selectedObjId }
+        if (target != null) {
+            StyleEditorSheet(
+                initialStyle = target.style,
+                onDismiss = { showStyleSheet = false },
+                onApply = { newStyle -> viewModel.updateObjectStyle(newStyle) }
+            )
+        } else {
+            showStyleSheet = false
         }
     }
 }

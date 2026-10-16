@@ -12,6 +12,8 @@ import com.aislide.studio.domain.usecase.AddSlideObjectUseCase
 import com.aislide.studio.domain.usecase.EditObjectWithAiUseCase
 import com.aislide.studio.domain.usecase.GenerateImageUseCase
 import com.aislide.studio.domain.usecase.UndoRedoUseCase
+import com.aislide.studio.domain.usecase.UpdateObjectStyleUseCase
+import com.aislide.studio.domain.usecase.UpdateObjectTextUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,7 +31,9 @@ class SlideEditorViewModel @Inject constructor(
     private val editObjectUseCase: EditObjectWithAiUseCase,
     private val addSlideObjectUseCase: AddSlideObjectUseCase,
     private val generateImageUseCase: GenerateImageUseCase,
-    private val undoRedoUseCase: UndoRedoUseCase
+    private val undoRedoUseCase: UndoRedoUseCase,
+    private val updateObjectStyleUseCase: UpdateObjectStyleUseCase,
+    private val updateObjectTextUseCase: UpdateObjectTextUseCase
 ) : ViewModel() {
 
     val projectId: Long = savedStateHandle["projectId"] ?: 0L
@@ -133,6 +137,26 @@ class SlideEditorViewModel @Inject constructor(
 
     fun clearExplanation() { _aiExplanation.value = null }
     fun clearError() { _aiError.value = null }
+
+    fun updateObjectStyle(newStyle: com.aislide.studio.data.model.ObjectStyle) {
+        val sld = slide.value ?: return
+        val objId = _selectedObjectId.value ?: return
+        val target = sld.objects.find { it.id == objId } ?: return
+        viewModelScope.launch {
+            updateObjectStyleUseCase(projectId, sld, target, newStyle)
+                .onFailure { e -> _aiError.value = "Style: ${e.message}" }
+        }
+    }
+
+    fun updateObjectText(newText: String? = null, newBullets: List<String>? = null) {
+        val sld = slide.value ?: return
+        val objId = _selectedObjectId.value ?: return
+        val target = sld.objects.find { it.id == objId } ?: return
+        viewModelScope.launch {
+            updateObjectTextUseCase(projectId, sld, target, newText, newBullets)
+                .onFailure { e -> _aiError.value = "Text: ${e.message}" }
+        }
+    }
 
     fun undo() {
         val current = _slide.value ?: return

@@ -76,4 +76,18 @@ object DomainModule {
         renderer: HtmlSlideRenderer,
         history: com.aislide.studio.domain.service.SlideHistoryManager
     ) = com.aislide.studio.domain.usecase.UndoRedoUseCase(repo, renderer, history)
+
+    @Provides @Singleton
+    fun provideUpdateObjectStyleUseCase(
+        repo: ProjectRepository,
+        renderer: HtmlSlideRenderer,
+        history: com.aislide.studio.domain.service.SlideHistoryManager
+    ) = com.aislide.studio.domain.usecase.UpdateObjectStyleUseCase(repo, renderer, history)
+
+    @Provides @Singleton
+    fun provideUpdateObjectTextUseCase(
+        repo: ProjectRepository,
+        renderer: HtmlSlideRenderer,
+        history: com.aislide.studio.domain.service.SlideHistoryManager
+    ) = com.aislide.studio.domain.usecase.UpdateObjectTextUseCase(repo, renderer, history)
 }

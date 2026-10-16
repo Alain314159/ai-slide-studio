@@ -111,7 +111,14 @@ $selectionScript
         val top = "%.2f%%".format(obj.position.y * 100)
         val width = "%.2f%%".format(obj.position.width * 100)
         val height = "%.2f%%".format(obj.position.height * 100)
-        val rotation = if (obj.position.rotation != 0f) "transform: rotate(${obj.position.rotation}deg);" else ""
+        val rotation = if (obj.position.rotation != 0f) {
+            val rotStr = if (obj.position.rotation == obj.position.rotation.toInt().toFloat()) {
+                obj.position.rotation.toInt().toString()
+            } else {
+                obj.position.rotation.toString()
+            }
+            "transform: rotate(${rotStr}deg);"
+        } else ""
 
         val style = buildString {
             append("left: $left; top: $top; width: $width; height: $height;")

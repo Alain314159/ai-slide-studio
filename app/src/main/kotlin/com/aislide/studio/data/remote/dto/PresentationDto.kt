@@ -48,20 +48,25 @@ data class SlideDto(
     val subtitle: String = "",
     val bullets: List<String> = emptyList(),
     @SerialName("image_description") val imageDescription: String? = null,
-    @SerialName("notes_for_speaker") val notesForSpeaker: String = ""
+    @SerialName("notes_for_speaker") val notesForSpeaker: String? = null
 )
 
 /**
  * What the LLM returns when asked to edit ONE object (the slide-by-slide AI
  * editor the user requested). The prompt constrains the LLM to only modify
  * the targeted object, never the rest of the slide.
+ *
+ * IMPORTANT: all property names use @SerialName("snake_case") because the
+ * system prompt instructs the LLM to return snake_case JSON. Without these
+ * annotations, kotlinx-serialization would look for camelCase keys (e.g.
+ * "newText" instead of "new_text") and silently set the fields to null.
  */
 @Serializable
 data class ObjectEditResultDto(
-    val newText: String? = null,
-    val newBullets: List<String>? = null,
-    val newImageDescription: String? = null,
-    val newStyle: ObjectStyleDto? = null,
+    @SerialName("new_text") val newText: String? = null,
+    @SerialName("new_bullets") val newBullets: List<String>? = null,
+    @SerialName("new_image_description") val newImageDescription: String? = null,
+    @SerialName("new_style") val newStyle: ObjectStyleDto? = null,
     val explanation: String = ""
 )
 

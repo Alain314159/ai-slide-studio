@@ -149,6 +149,9 @@ dependencies {
     // Logging
     implementation(libs.timber)
 
+    // Core library desugaring (Java 8+ APIs on minSdk 26)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

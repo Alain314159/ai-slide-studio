@@ -136,6 +136,15 @@ class LlmRepository @Inject constructor(
     }
 
     /**
+     * Public chat call for arbitrary prompts (e.g. for API key validation).
+     * Returns the assistant message text.
+     */
+    suspend fun chatText(request: ChatRequest): String {
+        val cfg = resolve()
+        return apiService.chatText(cfg.endpoint, cfg.apiKey, request)
+    }
+
+    /**
      * Some models wrap JSON inside ```json ... ``` blocks. Strip those.
      */
     private fun extractJsonObject(raw: String): String {

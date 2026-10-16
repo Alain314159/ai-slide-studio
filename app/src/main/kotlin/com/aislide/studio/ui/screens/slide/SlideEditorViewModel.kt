@@ -57,6 +57,9 @@ class SlideEditorViewModel @Inject constructor(
     private val _imageLoading = MutableStateFlow(false)
     val imageLoading: StateFlow<Boolean> = _imageLoading.asStateFlow()
 
+    private val _lastSavedAt = MutableStateFlow<Long?>(null)
+    val lastSavedAt: StateFlow<Long?> = _lastSavedAt.asStateFlow()
+
     private val _slide = MutableStateFlow<Slide?>(null)
     val slide: StateFlow<Slide?> = _slide.asStateFlow()
 
@@ -64,6 +67,20 @@ class SlideEditorViewModel @Inject constructor(
         viewModelScope.launch {
             presentation.collect { pres ->
                 _slide.value = pres?.slides?.find { it.index == slideIndex }
+            }
+        }
+    }
+
+    /**
+     * Called by any use case after a successful save to mark the save timestamp.
+     * The UI shows "Guardado ✓" for ~2 seconds after this.
+     */
+    private fun markSaved() {
+        _lastSavedAt.value = System.currentTimeMillis()
+        viewModelScope.launch {
+            kotlinx.coroutines.delay(2000)
+            if (System.currentTimeMillis() - (_lastSavedAt.value ?: 0L) >= 2000) {
+                _lastSavedAt.value = null
             }
         }
     }
@@ -88,7 +105,7 @@ class SlideEditorViewModel @Inject constructor(
         _aiError.value = null
         viewModelScope.launch {
             editObjectUseCase(projectId, sld, target, instruction)
-                .onSuccess { explanation -> _aiExplanation.value = explanation }
+                .onSuccess { explanation -> _aiExplanation.value = explanation; markSaved() }
                 .onFailure { e -> _aiError.value = e.message ?: "Error desconocido" }
             _aiLoading.value = false
         }
@@ -144,6 +161,7 @@ class SlideEditorViewModel @Inject constructor(
         val target = sld.objects.find { it.id == objId } ?: return
         viewModelScope.launch {
             updateObjectStyleUseCase(projectId, sld, target, newStyle)
+                .onSuccess { markSaved() }
                 .onFailure { e -> _aiError.value = "Style: ${e.message}" }
         }
     }
@@ -154,6 +172,7 @@ class SlideEditorViewModel @Inject constructor(
         val target = sld.objects.find { it.id == objId } ?: return
         viewModelScope.launch {
             updateObjectTextUseCase(projectId, sld, target, newText, newBullets)
+                .onSuccess { markSaved() }
                 .onFailure { e -> _aiError.value = "Text: ${e.message}" }
         }
     }

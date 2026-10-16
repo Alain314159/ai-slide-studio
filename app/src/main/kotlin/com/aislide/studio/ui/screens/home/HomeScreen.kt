@@ -17,13 +17,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,6 +35,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +61,18 @@ fun HomeScreenRoute(
     var showRenameDialog by remember { mutableStateOf<Long?>(null) }
     var importUri by remember { mutableStateOf<Uri?>(null) }
     var importTitle by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var showSearch by remember { mutableStateOf(false) }
+
+    val filteredProjects by remember(projects, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.isBlank()) projects
+            else projects.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                it.description.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
 
     val pickPptxLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -66,15 +80,30 @@ fun HomeScreenRoute(
         if (uri != null) {
             importUri = uri
             importTitle = "Presentación importada"
-            showRenameDialog = -1L  // signals "this is the import dialog"
+            showRenameDialog = -1L
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("AI Slide Studio") },
+                title = {
+                    if (showSearch) {
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("Buscar…") }
+                        )
+                    } else {
+                        Text("AI Slide Studio")
+                    }
+                },
                 actions = {
+                    IconButton(onClick = { showSearch = !showSearch; if (!showSearch) searchQuery = "" }) {
+                        Icon(Icons.Default.Search, contentDescription = "Buscar")
+                    }
                     IconButton(onClick = { navController.navigate(Routes.SETTINGS) }) {
                         Icon(Icons.Default.Settings, contentDescription = "Ajustes")
                     }
@@ -97,8 +126,12 @@ fun HomeScreenRoute(
         }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (projects.isEmpty() && !importing) {
+            if (filteredProjects.isEmpty() && !importing && searchQuery.isBlank()) {
                 EmptyState(modifier = Modifier.fillMaxSize())
+            } else if (filteredProjects.isEmpty() && searchQuery.isNotBlank()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Sin resultados para \"$searchQuery\"", style = MaterialTheme.typography.bodyLarge)
+                }
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(16.dp),
@@ -107,7 +140,7 @@ fun HomeScreenRoute(
                     if (importing) {
                         item { Text("Importando .pptx…", style = MaterialTheme.typography.bodyMedium) }
                     }
-                    items(projects, key = { it.id }) { project ->
+                    items(filteredProjects, key = { it.id }) { project ->
                         ProjectCard(
                             project = project,
                             onClick = { navController.navigate(Routes.editor(project.id)) },
@@ -138,7 +171,6 @@ fun HomeScreenRoute(
         }
     }
 
-    // === Rename dialog OR Import-name dialog ===
     val dialogId = showRenameDialog
     if (dialogId != null) {
         val isImport = dialogId == -1L
@@ -222,7 +254,7 @@ private fun ProjectCard(
     onDelete: () -> Unit,
     onRename: () -> Unit
 ) {
-    Card(onClick = onClick) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -239,7 +271,7 @@ private fun ProjectCard(
                 Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Renombrar")
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.UploadFile, contentDescription = "Eliminar")
+                Icon(Icons.Default.Delete, contentDescription = "Eliminar")
             }
         }
     }

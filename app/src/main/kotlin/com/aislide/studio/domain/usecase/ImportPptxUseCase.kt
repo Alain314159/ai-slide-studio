@@ -38,6 +38,7 @@ import javax.inject.Singleton
 class ImportPptxUseCase @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val htmlRenderer: HtmlSlideRenderer,
+    private val imageStorage: com.aislide.studio.data.local.ImageStorageManager,
     @ApplicationContext private val context: Context
 ) {
     suspend operator fun invoke(inputUri: Uri, title: String): Result<Long> =
@@ -72,12 +73,11 @@ class ImportPptxUseCase @Inject constructor(
                                 }
                                 is org.apache.poi.xslf.usermodel.XSLFPictureShape -> {
                                     val picBytes = shape.pictureData.data
-                                    val localFile = File(context.cacheDir, "imported_${System.currentTimeMillis()}_${objs.size}.png")
-                                    localFile.writeBytes(picBytes)
+                                    val localPath = imageStorage.saveImportedImage(picBytes)
                                     objs += SlideObject(
                                         id = UUID.randomUUID().toString(),
                                         type = ObjectType.IMAGE,
-                                        imageUrl = localFile.absolutePath,
+                                        imageUrl = localPath,
                                         position = pos,
                                         style = ObjectStyle.default()
                                     )

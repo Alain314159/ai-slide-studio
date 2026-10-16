@@ -75,6 +75,7 @@ fun SlideEditorScreenRoute(
     val aiError by viewModel.aiError.collectAsState()
     val aiExplanation by viewModel.aiExplanation.collectAsState()
     val imageLoading by viewModel.imageLoading.collectAsState()
+    val lastSavedAt by viewModel.lastSavedAt.collectAsState()
 
     var showAiSheet by remember { mutableStateOf(false) }
     var showImageSheet by remember { mutableStateOf(false) }
@@ -93,6 +94,14 @@ fun SlideEditorScreenRoute(
                     }
                 },
                 actions = {
+                    if (lastSavedAt != null) {
+                        Text(
+                            "Guardado ✓",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
                     IconButton(onClick = viewModel::undo, enabled = viewModel.canUndo) {
                         Icon(Icons.Default.Undo, contentDescription = "Deshacer")
                     }

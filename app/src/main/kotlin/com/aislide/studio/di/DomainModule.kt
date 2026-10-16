@@ -58,14 +58,27 @@ object DomainModule {
     @Provides @Singleton
     fun provideGenerateImageUseCase(
         llm: LlmRepository,
-        @dagger.hilt.android.qualifiers.ApplicationContext ctx: android.content.Context
-    ) = GenerateImageUseCase(llm, ctx)
+        imageStorage: com.aislide.studio.data.local.ImageStorageManager
+    ) = GenerateImageUseCase(llm, imageStorage)
 
     @Provides @Singleton
     fun provideImportPptxUseCase(
         repo: ProjectRepository, renderer: HtmlSlideRenderer,
+        imageStorage: com.aislide.studio.data.local.ImageStorageManager,
         @dagger.hilt.android.qualifiers.ApplicationContext ctx: android.content.Context
-    ) = ImportPptxUseCase(repo, renderer, ctx)
+    ) = ImportPptxUseCase(repo, renderer, imageStorage, ctx)
+
+    @Provides @Singleton
+    fun provideImageStorageManager(
+        @dagger.hilt.android.qualifiers.ApplicationContext ctx: android.content.Context
+    ): com.aislide.studio.data.local.ImageStorageManager =
+        com.aislide.studio.data.local.ImageStorageManager(ctx)
+
+    @Provides @Singleton
+    fun provideValidateApiKeyUseCase(
+        llm: LlmRepository,
+        settings: com.aislide.studio.data.local.SettingsDataStore
+    ) = com.aislide.studio.domain.usecase.ValidateApiKeyUseCase(llm, settings)
 
     @Provides @Singleton
     fun provideSlideHistoryManager() = com.aislide.studio.domain.service.SlideHistoryManager()

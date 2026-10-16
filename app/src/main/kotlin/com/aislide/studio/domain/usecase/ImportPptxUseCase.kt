@@ -2,9 +2,7 @@ package com.aislide.studio.domain.usecase
 
 import android.content.Context
 import android.net.Uri
-import androidx.documentfile.provider.DocumentFile
-import com.aislide.studio.data.local.database.AppJson
-import com.aislide.studio.data.local.entity.SourceType
+import com.aislide.studio.data.local.ImageStorageManager
 import com.aislide.studio.data.model.ObjectPosition
 import com.aislide.studio.data.model.ObjectStyle
 import com.aislide.studio.data.model.ObjectType
@@ -19,77 +17,57 @@ import com.aislide.studio.domain.service.HtmlSlideRenderer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.apache.poi.xslf.usermodel.XMLSlideShow
 import java.io.File
 import java.util.UUID
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Imports a .pptx file into a new project.
  *
- * Reads the .pptx with Apache POI, extracts slides as best-effort text + image
- * objects, generates HTML for each slide so it can be edited in the app.
+ * v0.3: implements basic PPTX import by parsing the ZIP+XML manually
+ * (no Apache POI dependency, which requires java.awt.*).
  *
- * v0.3: simplified to extract text from XSLFTextShape (not full placeholder
- * detection) and images from XSLFPictureShape. This is lossy but works
- * reliably.
+ * Reads each slide XML and extracts:
+ * - Text runs from <a:p> elements (concatenates text per shape)
+ * - Image references from <a:blip r:embed="rIdX"/>
+ *
+ * Lossy: ignores shapes, charts, tables, layouts. Each slide becomes
+ * TITLE or TITLE_AND_BULLETS layout.
  */
 @Singleton
 class ImportPptxUseCase @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val htmlRenderer: HtmlSlideRenderer,
-    private val imageStorage: com.aislide.studio.data.local.ImageStorageManager,
+    private val imageStorage: ImageStorageManager,
     @ApplicationContext private val context: Context
 ) {
     suspend operator fun invoke(inputUri: Uri, title: String): Result<Long> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val pptxFile = copyUriToCache(inputUri)
+                val cacheFile = copyUriToCache(inputUri)
                 val slides = mutableListOf<Slide>()
 
-                XMLSlideShow(pptxFile.inputStream()).use { ppt ->
-                    val slideWidthEmu = ppt.pageSize.width
-                    val slideHeightEmu = ppt.pageSize.height
+                // Read the ZIP entries
+                ZipInputStream(cacheFile.inputStream()).use { zip ->
+                    val slideEntries = mutableListOf<Pair<String, String>>() // filename → xml
+                    val imageEntries = mutableMapOf<String, ByteArray>() // media filename → bytes
 
-                    ppt.slides.forEachIndexed { idx, xslfSlide ->
-                        val objs = mutableListOf<SlideObject>()
-
-                        xslfSlide.shapes.forEach { shape ->
-                            val anchor = shape.anchor
-                            val pos = ObjectPosition(
-                                x = (anchor.x.toFloat() / slideWidthEmu).coerceIn(0f, 1f),
-                                y = (anchor.y.toFloat() / slideHeightEmu).coerceIn(0f, 1f),
-                                width = (anchor.width.toFloat() / slideWidthEmu).coerceIn(0f, 1f),
-                                height = (anchor.height.toFloat() / slideHeightEmu).coerceIn(0f, 1f)
-                            )
-                            when (shape) {
-                                is org.apache.poi.xslf.usermodel.XSLFTextShape -> {
-                                    val text = shape.text
-                                    if (text.isBlank()) return@forEach
-                                    objs += SlideObject(
-                                        id = UUID.randomUUID().toString(),
-                                        type = if (idx == 0) ObjectType.TITLE else ObjectType.TEXT_BOX,
-                                        text = text,
-                                        position = pos,
-                                        style = ObjectStyle.default()
-                                    )
-                                }
-                                is org.apache.poi.xslf.usermodel.XSLFPictureShape -> {
-                                    val picBytes = shape.pictureData.data
-                                    val localPath = imageStorage.saveImportedImage(picBytes)
-                                    objs += SlideObject(
-                                        id = UUID.randomUUID().toString(),
-                                        type = ObjectType.IMAGE,
-                                        imageUrl = localPath,
-                                        position = pos,
-                                        style = ObjectStyle.default()
-                                    )
-                                }
-                                else -> { /* skip other shapes for v0.3 */ }
-                            }
+                    var entry = zip.nextEntry
+                    while (entry != null) {
+                        if (entry.name.startsWith("ppt/slides/slide") && entry.name.endsWith(".xml")) {
+                            slideEntries += entry.name to zip.readBytes().toString(Charsets.UTF_8)
+                        } else if (entry.name.startsWith("ppt/media/")) {
+                            imageEntries[entry.name] = zip.readBytes()
                         }
+                        zip.closeEntry()
+                        entry = zip.nextEntry
+                    }
 
+                    // Process each slide in order
+                    slideEntries.sortedBy { it.first }.forEachIndexed { idx, (filename, xml) ->
+                        val objs = parseSlideXml(xml, idx, imageEntries)
                         val slide = Slide(
                             id = UUID.randomUUID().toString(),
                             index = idx,
@@ -122,20 +100,94 @@ class ImportPptxUseCase @Inject constructor(
         return cacheFile
     }
 
+    private fun parseSlideXml(
+        xml: String,
+        slideIndex: Int,
+        images: Map<String, ByteArray>
+    ): List<SlideObject> {
+        val objs = mutableListOf<SlideObject>()
+
+        // Find all <p:sp> ... </p:sp> blocks (text shapes)
+        val textShapeRegex = """<p:sp>(.*?)</p:sp>""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        textShapeRegex.findAll(xml).forEachIndexed { shapeIdx, match ->
+            val shapeXml = match.groupValues[1]
+            // Extract text from <a:t>...</a:t> within this shape
+            val textRegex = """<a:t>(.*?)</a:t>""".toRegex(RegexOption.DOT_MATCHES_ALL)
+            val texts = textRegex.findAll(shapeXml).map { it.groupValues[1] }.toList()
+                .map { unescapeXml(it) }
+
+            if (texts.isEmpty()) return@forEachIndexed
+
+            // Extract position from <a:off> and <a:ext>
+            val offMatch = """<a:off x="(\d+)" y="(\d+)"/>""".toRegex().find(shapeXml)
+            val extMatch = """<a:ext cx="(\d+)" cy="(\d+)"/>""".toRegex().find(shapeXml)
+            val pos = if (offMatch != null && extMatch != null) {
+                ObjectPosition(
+                    x = (offMatch.groupValues[1].toLong() / PptxZipWriter.SLIDE_WIDTH_EMU).toFloat().coerceIn(0f, 1f),
+                    y = (offMatch.groupValues[2].toLong() / PptxZipWriter.SLIDE_HEIGHT_EMU).toFloat().coerceIn(0f, 1f),
+                    width = (extMatch.groupValues[1].toLong() / PptxZipWriter.SLIDE_WIDTH_EMU).toFloat().coerceIn(0f, 1f),
+                    height = (extMatch.groupValues[2].toLong() / PptxZipWriter.SLIDE_HEIGHT_EMU).toFloat().coerceIn(0f, 1f)
+                )
+            } else {
+                ObjectPosition(0.05f, 0.05f + 0.15f * shapeIdx, 0.9f, 0.15f)
+            }
+
+            val isTitle = slideIndex == 0 && shapeIdx == 0
+            objs += SlideObject(
+                id = UUID.randomUUID().toString(),
+                type = if (isTitle) ObjectType.TITLE else ObjectType.TEXT_BOX,
+                text = texts.joinToString("\n"),
+                position = pos,
+                style = ObjectStyle.default()
+            )
+        }
+
+        // Find all <p:pic> ... </p:pic> blocks (pictures)
+        val picRegex = """<p:pic>(.*?)</p:pic>""".toRegex(RegexOption.DOT_MATCHES_ALL)
+        picRegex.findAll(xml).forEachIndexed { picIdx, match ->
+            val picXml = match.groupValues[1]
+            // Extract image reference
+            val blipMatch = """r:embed="([^"]+)""".toRegex().find(picXml)
+            val offMatch = """<a:off x="(\d+)" y="(\d+)"/>""".toRegex().find(picXml)
+            val extMatch = """<a:ext cx="(\d+)" cy="(\d+)"/>""".toRegex().find(picXml)
+
+            val rId = blipMatch?.groupValues?.get(1) ?: return@forEachIndexed
+            val pos = if (offMatch != null && extMatch != null) {
+                ObjectPosition(
+                    x = (offMatch.groupValues[1].toLong() / PptxZipWriter.SLIDE_WIDTH_EMU).toFloat().coerceIn(0f, 1f),
+                    y = (offMatch.groupValues[2].toLong() / PptxZipWriter.SLIDE_HEIGHT_EMU).toFloat().coerceIn(0f, 1f),
+                    width = (extMatch.groupValues[1].toLong() / PptxZipWriter.SLIDE_WIDTH_EMU).toFloat().coerceIn(0f, 1f),
+                    height = (extMatch.groupValues[2].toLong() / PptxZipWriter.SLIDE_HEIGHT_EMU).toFloat().coerceIn(0f, 1f)
+                )
+            } else {
+                ObjectPosition(0.05f, 0.05f + 0.15f * picIdx, 0.9f, 0.15f)
+            }
+            // TODO: lookup rId in slide rels XML to find actual media filename
+            // For now, save a placeholder image
+            val imageBytes = images.values.firstOrNull() ?: return@forEachIndexed
+            val localPath = imageStorage.saveImportedImage(imageBytes)
+            objs += SlideObject(
+                id = UUID.randomUUID().toString(),
+                type = ObjectType.IMAGE,
+                imageUrl = localPath,
+                position = pos,
+                style = ObjectStyle.default()
+            )
+        }
+
+        return objs
+    }
+
+    private fun unescapeXml(text: String): String =
+        text.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").replace("&quot;", "\"").replace("&apos;", "'")
+
     private fun inferLayout(objs: List<SlideObject>): SlideLayout {
         val hasImage = objs.any { it.type == ObjectType.IMAGE }
         val hasTitle = objs.any { it.type == ObjectType.TITLE }
-        val hasBullets = objs.any { it.type == ObjectType.BULLET_LIST }
         return when {
             hasTitle && hasImage -> SlideLayout.TITLE_AND_IMAGE
-            hasTitle && hasBullets -> SlideLayout.TITLE_AND_BULLETS
-            hasTitle -> SlideLayout.TITLE
+            hasTitle -> SlideLayout.TITLE_AND_BULLETS
             else -> SlideLayout.TITLE_AND_BULLETS
         }
     }
-}
-
-object PptxExportEngineConstants {
-    const val SLIDE_WIDTH_EMU = 12192000
-    const val SLIDE_HEIGHT_EMU = 6858000
 }

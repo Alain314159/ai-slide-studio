@@ -32,6 +32,9 @@ ktor = "3.0.1"
 serialization = "1.7.3"
 
 # Apache POI for .pptx import/export
+# Disabled: requires java.awt.* which is NOT available on Android.
+# We implement PPTX generation manually with ZIP + XML (see PptxZipWriter).
+# Keeping the version number in case we re-enable for tests only.
 poi = "5.3.0"
 poiOoxml = "5.3.0"
 

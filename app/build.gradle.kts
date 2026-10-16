@@ -135,9 +135,12 @@ dependencies {
     implementation(libs.ktor.serialization.json)
     implementation(libs.ktor.client.logging)
 
-    // Apache POI (.pptx)
-    implementation(libs.poi.core)
-    implementation(libs.poi.ooxml)
+    // Apache POI (.pptx) — DISABLED: requires java.awt.* which is not available on Android.
+    // We implement PPTX generation manually with ZIP + XML (see PptxZipWriter).
+    // If you re-enable, you MUST add `org.apache.poi:poi-ooxml-lite` and exclude AWT,
+    // or use a tool like `proguard` to strip the AWT symbols.
+    // implementation(libs.poi.core)
+    // implementation(libs.poi.ooxml)
 
     // HTML parsing
     implementation(libs.jsoup)

@@ -3,51 +3,45 @@ package com.aislide.studio.domain.usecase
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Picture
 import android.net.Uri
+import android.view.ViewGroup
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.documentfile.provider.DocumentFile
 import com.aislide.studio.data.model.Presentation
 import com.aislide.studio.data.model.Slide
 import com.aislide.studio.data.repository.ProjectRepository
 import com.aislide.studio.domain.service.HtmlSlideRenderer
-import com.aislide.studio.domain.service.PptxExportEngine
+import com.aislide.studio.domain.service.PptxZipWriter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import org.apache.poi.sl.usermodel.PictureData
-import org.apache.poi.xslf.usermodel.XMLSlideShow
-import org.apache.poi.xslf.usermodel.XSLFPictureData
 import java.io.ByteArrayOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 
 /**
- * Exports a presentation to .pptx in "vector" mode — each slide is rendered
- * to a high-resolution bitmap via WebView capture, then inserted as a full-slide
- * picture in the .pptx.
+ * Exports a presentation to .pptx in "visual" mode — each slide is rendered
+ * to a high-resolution bitmap via WebView capture, then inserted as a
+ * full-slide picture in the .pptx.
  *
- * Result: visual fidelity is very high (looks exactly like the app preview),
- * but text is not selectable/editable in PowerPoint (it's a picture).
+ * v0.3: uses [PptxZipWriter] for the .pptx ZIP+XML skeleton and adds
+ * PNG media files for each slide. No Apache POI dependency.
  *
- * Implementation note: true SVG embedding requires a JS-level html-to-svg library
- * inside the WebView, then capturing the SVG via JavascriptInterface. That's
- * deferred to v0.3. For v0.1 we use WebView's on-screen capture at 2x density
- * (1920×1080 → 3840×2160 effective pixels) — visually crisp on any projector,
- * and Apache POI inserts it as a picture with original resolution.
+ * Result: visual fidelity is high, but text is NOT selectable/editable
+ * (it's part of the picture).
  */
 @Singleton
 class ExportToPptxVectorUseCase @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val htmlRenderer: HtmlSlideRenderer,
+    private val zipWriter: PptxZipWriter,
     @ApplicationContext private val context: Context
 ) {
-    /**
-     * Captures each slide as a high-res PNG via WebView, then builds a .pptx
-     * where each slide is a full-bleed picture.
-     */
     suspend operator fun invoke(
         projectId: Long,
         outputUri: Uri,
@@ -57,34 +51,43 @@ class ExportToPptxVectorUseCase @Inject constructor(
             val presentation = projectRepository.getProject(projectId)
                 ?: error("Project not found: $projectId")
 
-            // Capture each slide as PNG bytes (high-res for crisp projection)
+            // 1. Write the ZIP skeleton (slides.xml, presentation.xml, etc.)
+            val zipBytes = ByteArrayOutputStream().use { out ->
+                zipWriter.export(presentation, out)
+                out.toByteArray()
+            }
+
+            // 2. Capture each slide as PNG
             val slideImages: List<ByteArray> = presentation.slides.map { slide ->
                 captureSlideToPng(slide, presentation)
             }
 
-            // Build the .pptx with each slide as a full-bleed picture
-            val pptxBytes = XMLSlideShow().use { ppt ->
-                ppt.pageSize = java.awt.Dimension(
-                    PptxExportEngine.SLIDE_WIDTH_EMU,
-                    PptxExportEngine.SLIDE_HEIGHT_EMU
-                )
-                presentation.slides.indices.forEach { idx ->
-                    val blank = ppt.createSlide()
-                    val picData = ppt.addPicture(slideImages[idx], PictureData.PictureType.PNG)
-                    val pic = blank.createPicture(picData)
-                    pic.anchor = java.awt.Rectangle(
-                        0, 0,
-                        PptxExportEngine.SLIDE_WIDTH_EMU,
-                        PptxExportEngine.SLIDE_HEIGHT_EMU
-                    )
+            // 3. Re-zip the skeleton + add the PNG media files
+            // Read the existing zip, copy entries, and append ppt/media/imageN.png entries
+            val finalBytes = ByteArrayOutputStream().use { finalOut ->
+                ZipOutputStream(finalOut).use { newZip ->
+                    // Read the existing zip and copy entries
+                    val originalZip = java.util.zip.ZipInputStream(zipBytes.inputStream())
+                    var entry = originalZip.nextEntry
+                    while (entry != null) {
+                        newZip.putNextEntry(ZipEntry(entry.name))
+                        originalZip.copyTo(newZip)
+                        newZip.closeEntry()
+                        originalZip.closeEntry()
+                        entry = originalZip.nextEntry
+                    }
+                    originalZip.close()
+                    // Add PNG images
+                    slideImages.forEachIndexed { idx, bytes ->
+                        newZip.putNextEntry(ZipEntry("ppt/media/image${idx + 1}.png"))
+                        newZip.write(bytes)
+                        newZip.closeEntry()
+                    }
                 }
-                ByteArrayOutputStream().use { out ->
-                    ppt.write(out)
-                    out.toByteArray()
-                }
+                finalOut.toByteArray()
             }
 
-            // Write to SAF document
+            // 4. Write to SAF document
             val target = DocumentFile.fromTreeUri(context, outputUri)
                 ?: error("Invalid output directory")
             target.findFile("$fileName.pptx")?.delete()
@@ -93,29 +96,24 @@ class ExportToPptxVectorUseCase @Inject constructor(
                 "$fileName.pptx"
             ) ?: error("Failed to create file")
             context.contentResolver.openOutputStream(file.uri)?.use { out ->
-                out.write(pptxBytes)
+                out.write(finalBytes)
                 out.flush()
             } ?: error("Failed to open output stream")
 
-            pptxBytes.size.toLong()
+            finalBytes.size.toLong()
         }
     }
 
-    /**
-     * Renders a slide's HTML in an off-screen WebView at 2x pixel density and
-     * captures the result as a PNG.
-     */
     private suspend fun captureSlideToPng(slide: Slide, presentation: Presentation): ByteArray {
         val html = htmlRenderer.render(slide, presentation.palette, presentation.typography)
         val widthPx = 1920
         val heightPx = 1080
 
         return suspendCancellableCoroutine { cont ->
-            // WebView must be created on the main thread
             val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
             mainHandler.post {
                 val webView = WebView(context)
-                webView.layoutParams = android.view.ViewGroup.LayoutParams(widthPx, heightPx)
+                webView.layoutParams = ViewGroup.LayoutParams(widthPx, heightPx)
                 webView.settings.javaScriptEnabled = false
                 webView.settings.loadWithOverviewMode = true
                 webView.settings.useWideViewPort = true
@@ -125,7 +123,7 @@ class ExportToPptxVectorUseCase @Inject constructor(
                 )
                 webView.layout(0, 0, widthPx, heightPx)
 
-                webView.webViewClient = object : android.webkit.WebViewClient() {
+                webView.webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         view?.postDelayed({
                             val bitmap = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
@@ -136,11 +134,10 @@ class ExportToPptxVectorUseCase @Inject constructor(
                                 out.toByteArray()
                             }
                             bitmap.recycle()
-                            // Cleanup
-                            (webView.parent as? android.view.ViewGroup)?.removeView(webView)
+                            (webView.parent as? ViewGroup)?.removeView(webView)
                             webView.destroy()
                             if (cont.isActive) cont.resume(bytes)
-                        }, 300L)  // allow layout settle
+                        }, 300L)
                     }
                 }
                 webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)

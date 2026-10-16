@@ -1,8 +1,10 @@
 package com.aislide.studio.domain.service
 
+import android.webkit.JavascriptInterface
 import com.aislide.studio.data.model.Palette
 import com.aislide.studio.data.model.Slide
 import com.aislide.studio.data.model.SlideObject
+import com.aislide.studio.data.model.TextAlign
 import com.aislide.studio.data.model.Typography
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -10,31 +12,32 @@ import javax.inject.Singleton
 /**
  * Renders a [Slide] to a complete, self-contained HTML/CSS document.
  *
+ * v0.2: now injects a small JS script that listens for taps on objects with
+ * `data-obj-id` and calls back to the host via [ObjectSelectionBridge].
+ *
  * The HTML is rendered by an Android WebView in the editor screen.
  * The same HTML will be parsed by [PptxExportEngine] to produce the .pptx.
  *
- * Why HTML/CSS instead of native Android Canvas:
- * - The LLM knows HTML/CSS extremely well; it generates it natively.
- * - HTML/CSS gives infinite visual freedom (gradients, shadows, animations, fonts).
- * - WebView is fast and standard in Android.
- * - The same source becomes both the editor preview AND the export source.
- *
- * Output: a self-contained HTML document with inline CSS, no external deps.
+ * Output: a self-contained HTML document with inline CSS + JS, no external deps.
  */
 @Singleton
 class HtmlSlideRenderer @Inject constructor() {
 
     /**
      * Renders a slide to a full HTML document sized for a 16:9 slide.
+     * @param interactive When true, injects JS that lets users tap-to-select
+     *                    objects in the WebView. Default false for export.
      */
-    fun render(slide: Slide, palette: Palette, typography: Typography): String {
-        val titleStyle = "font-family: '${typography.headingFont}', sans-serif; font-weight: ${typography.headingWeight};"
-        val bodyStyle = "font-family: '${typography.bodyFont}', sans-serif; font-weight: ${typography.bodyWeight};"
+    fun render(
+        slide: Slide,
+        palette: Palette,
+        typography: Typography,
+        interactive: Boolean = false
+    ): String {
         val slideBg = slide.backgroundHex ?: palette.background
         val objects = slide.objects.joinToString("\n") { renderObject(it, palette, typography) }
-        val titleBlock = if (slide.title.isNotBlank() && slide.objects.none { it.text == slide.title }) {
-            ""
-        } else ""
+
+        val selectionScript = if (interactive) SELECTION_JS else ""
 
         return """<!DOCTYPE html>
 <html lang="es">
@@ -43,20 +46,17 @@ class HtmlSlideRenderer @Inject constructor() {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Slide ${slide.index + 1}</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     html, body { width: 100%; height: 100%; overflow: hidden; }
     body {
       background: $slideBg;
       color: ${palette.onBackground};
-      $bodyStyle
+      font-family: '${typography.bodyFont}', sans-serif;
+      font-weight: ${typography.bodyWeight};
       font-size: 18px;
+      user-select: none;
     }
-    .slide {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
+    .slide { position: relative; width: 100%; height: 100%; overflow: hidden; }
     .obj {
       position: absolute;
       display: flex;
@@ -66,14 +66,22 @@ class HtmlSlideRenderer @Inject constructor() {
       padding: 8px 12px;
       word-break: break-word;
       overflow: hidden;
+      cursor: pointer;
+      transition: outline 0.15s ease, background 0.15s ease;
     }
-    .obj.title $titleStyle
-    .obj.text, .obj.subtitle $bodyStyle
+    .obj.selected {
+      outline: 3px solid ${palette.accent};
+      outline-offset: -3px;
+      background: ${palette.accent}1A;  /* 10% overlay */
+    }
+    .obj.title { font-family: '${typography.headingFont}', sans-serif; font-weight: ${typography.headingWeight}; }
+    .obj.text, .obj.subtitle { font-family: '${typography.bodyFont}', sans-serif; font-weight: ${typography.bodyWeight}; }
     .obj.bullets ul { list-style: none; padding-left: 0; width: 100%; }
     .obj.bullets li {
       padding: 6px 0 6px 24px;
       position: relative;
-      $bodyStyle
+      font-family: '${typography.bodyFont}', sans-serif;
+      font-weight: ${typography.bodyWeight};
     }
     .obj.bullets li::before {
       content: "";
@@ -86,19 +94,14 @@ class HtmlSlideRenderer @Inject constructor() {
       background: ${palette.accent};
       transform: translateY(-50%);
     }
-    .obj.image img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      border-radius: 4px;
-    }
+    .obj.image img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
   </style>
 </head>
 <body>
   <div class="slide" data-slide-id="${slide.id}" data-slide-index="${slide.index}" data-layout="${slide.layout}">
 $objects
-$titleBlock
   </div>
+$selectionScript
 </body>
 </html>"""
     }
@@ -153,6 +156,67 @@ $titleBlock
             .replace("<", "&lt;")
             .replace(">", "&gt;")
             .replace("\n", "<br>")
+
+    /**
+     * JS injected when `interactive=true`. Listens for taps on .obj elements
+     * and calls back to the Android host via `AndroidBridge.onObjectTapped(id)`.
+     */
+    private val SELECTION_JS = """
+<script>
+(function() {
+  function highlight(id) {
+    document.querySelectorAll('.obj').forEach(function(el) { el.classList.remove('selected'); });
+    if (id) {
+      var el = document.querySelector('[data-obj-id="' + id + '"]');
+      if (el) el.classList.add('selected');
+    }
+  }
+  document.addEventListener('click', function(e) {
+    var target = e.target;
+    while (target && !target.classList.contains('obj')) {
+      target = target.parentElement;
+      if (!target || target === document.body) {
+        // tapped on background — deselect
+        if (window.AndroidBridge) AndroidBridge.onObjectTapped('');
+        highlight('');
+        e.preventDefault();
+        return;
+      }
+    }
+    if (target && target.hasAttribute('data-obj-id')) {
+      var id = target.getAttribute('data-obj-id');
+      highlight(id);
+      if (window.AndroidBridge) AndroidBridge.onObjectTapped(id);
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  // Expose a function the host can call to set selection programmatically
+  window.__setSelection = function(id) { highlight(id); };
+})();
+</script>
+"""
+
+    companion object {
+        const val JS_BRIDGE_NAME = "AndroidBridge"
+    }
+}
+
+/**
+ * JavascriptInterface implementation. Injected into the WebView as
+ * `AndroidBridge` so the JS in [SELECTION_JS] can call `onObjectTapped(id)`.
+ *
+ * IMPORTANT (security.md rule of android skill): only add a JavascriptInterface
+ * when needed (interactive editor only), and ensure no sensitive methods are
+ * exposed. This one just relays a string ID to a callback.
+ */
+class ObjectSelectionBridge(
+    private val onTap: (String) -> Unit
+) {
+    @JavascriptInterface
+    fun onObjectTapped(id: String) {
+        onTap(id)
+    }
 }
 
 private val com.aislide.studio.data.model.TextAlign.cssValue: String

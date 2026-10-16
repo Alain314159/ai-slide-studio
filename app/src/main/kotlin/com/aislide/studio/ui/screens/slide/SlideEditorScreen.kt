@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.view.ViewGroup
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,14 +15,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
@@ -57,8 +53,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import com.aislide.studio.data.model.SlideObject
+import com.aislide.studio.domain.service.HtmlSlideRenderer
+import com.aislide.studio.domain.service.ObjectSelectionBridge
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SlideEditorScreenRoute(
@@ -78,6 +76,7 @@ fun SlideEditorScreenRoute(
     var showImageSheet by remember { mutableStateOf(false) }
     var aiInstruction by remember { mutableStateOf("") }
     var imagePrompt by remember { mutableStateOf("") }
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     Scaffold(
         topBar = {
@@ -99,15 +98,11 @@ fun SlideEditorScreenRoute(
             return@Scaffold
         }
 
-        Row(
-            modifier = Modifier.fillMaxSize().padding(padding)
-        ) {
+        Row(modifier = Modifier.fillMaxSize().padding(padding)) {
             // === Slide canvas (left, 70%) ===
             Column(modifier = Modifier.weight(0.7f).padding(8.dp)) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
+                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                 ) {
                     AndroidView(
                         factory = { ctx ->
@@ -116,15 +111,37 @@ fun SlideEditorScreenRoute(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-                                settings.javaScriptEnabled = false
+                                settings.javaScriptEnabled = true  // required for tap-to-select
                                 settings.loadWithOverviewMode = true
                                 settings.useWideViewPort = true
+                                // Bridge that JS calls back when an object is tapped
+                                addJavascriptInterface(
+                                    ObjectSelectionBridge { id ->
+                                        viewModel.selectObject(id.ifBlank { null })
+                                    },
+                                    HtmlSlideRenderer.JS_BRIDGE_NAME
+                                )
                                 webViewClient = WebViewClient()
-                                loadDataWithBaseURL(null, currentSlide.htmlContent, "text/html", "UTF-8", null)
-                            }
+                                // Initial load is set in update {}
+                            }.also { webViewRef = it }
                         },
                         update = { web ->
-                            web.loadDataWithBaseURL(null, currentSlide.htmlContent, "text/html", "UTF-8", null)
+                            // Re-render with interactive=true so JS is injected
+                            val pres = viewModel.presentation.value
+                            if (pres != null) {
+                                val html = viewModel.renderInteractiveSlide(currentSlide.index)
+                                web.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                                // After page loads, sync the selection from ViewModel
+                                web.post {
+                                    val selId = selectedObjId
+                                    val js = if (selId.isNullOrBlank()) {
+                                        "window.__setSelection && window.__setSelection('');"
+                                    } else {
+                                        "window.__setSelection && window.__setSelection('$selId');"
+                                    }
+                                    web.evaluateJavascript(js, null)
+                                }
+                            }
                         },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -153,17 +170,17 @@ fun SlideEditorScreenRoute(
                 }
             }
 
-            // === Object list (right, 30%) ===
+            // === Object list (right, 30%) — for visual feedback and AI access ===
             Column(
-                modifier = Modifier
-                    .weight(0.3f)
-                    .fillMaxHeight()
-                    .padding(8.dp)
+                modifier = Modifier.weight(0.3f).fillMaxHeight().padding(8.dp)
             ) {
                 Text("Objetos", style = MaterialTheme.typography.titleSmall)
                 Spacer(modifier = Modifier.height(8.dp))
                 if (currentSlide.objects.isEmpty()) {
-                    Text("No hay objetos. Añade uno con los botones de abajo.", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "No hay objetos. Añade uno con los botones de abajo.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(currentSlide.objects, key = { it.id }) { obj ->
@@ -187,7 +204,7 @@ fun SlideEditorScreenRoute(
                         Text("Editar con IA")
                     }
                     IconButton(onClick = { viewModel.selectObject(null) }, modifier = Modifier.align(Alignment.End)) {
-                        Icon(Icons.Default.Close, contentDescription = "Deselect")
+                        Icon(Icons.Default.Close, contentDescription = "Quitar selección")
                     }
                 }
                 if (aiLoading) Text("IA trabajando…", modifier = Modifier.padding(4.dp), style = MaterialTheme.typography.bodySmall)
@@ -269,11 +286,10 @@ private fun ObjectListItem(
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        modifier = Modifier.fillMaxWidth(),
         color = bg,
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(8.dp),
+        onClick = onClick
     ) {
         Column(modifier = Modifier.padding(8.dp)) {
             Text(

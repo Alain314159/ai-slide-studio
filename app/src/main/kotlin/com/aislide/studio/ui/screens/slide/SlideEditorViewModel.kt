@@ -3,9 +3,11 @@ package com.aislide.studio.ui.screens.slide
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aislide.studio.data.model.Presentation
 import com.aislide.studio.data.model.Slide
 import com.aislide.studio.data.model.SlideObject
 import com.aislide.studio.data.repository.ProjectRepository
+import com.aislide.studio.domain.service.HtmlSlideRenderer
 import com.aislide.studio.domain.usecase.AddSlideObjectUseCase
 import com.aislide.studio.domain.usecase.EditObjectWithAiUseCase
 import com.aislide.studio.domain.usecase.GenerateImageUseCase
@@ -22,6 +24,7 @@ import javax.inject.Inject
 class SlideEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val projectRepository: ProjectRepository,
+    private val htmlRenderer: HtmlSlideRenderer,
     private val editObjectUseCase: EditObjectWithAiUseCase,
     private val addSlideObjectUseCase: AddSlideObjectUseCase,
     private val generateImageUseCase: GenerateImageUseCase
@@ -30,8 +33,8 @@ class SlideEditorViewModel @Inject constructor(
     val projectId: Long = savedStateHandle["projectId"] ?: 0L
     val slideIndex: Int = savedStateHandle["slideIndex"] ?: 0
 
-    private val _slide = MutableStateFlow<Slide?>(null)
-    val slide: StateFlow<Slide?> = _slide.asStateFlow()
+    val presentation: StateFlow<Presentation?> = projectRepository.observeProject(projectId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _selectedObjectId = MutableStateFlow<String?>(null)
     val selectedObjectId: StateFlow<String?> = _selectedObjectId.asStateFlow()
@@ -48,35 +51,37 @@ class SlideEditorViewModel @Inject constructor(
     private val _imageLoading = MutableStateFlow(false)
     val imageLoading: StateFlow<Boolean> = _imageLoading.asStateFlow()
 
-    init {
-        loadSlide()
-    }
+    private val _slide = MutableStateFlow<Slide?>(null)
+    val slide: StateFlow<Slide?> = _slide.asStateFlow()
 
-    private fun loadSlide() {
-        projectRepository.observeProject(projectId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-            .let { projectFlow ->
-                viewModelScope.launch {
-                    projectFlow.collect { pres ->
-                        pres?.slides?.find { it.index == slideIndex }?.let { _slide.value = it }
-                    }
-                }
+    init {
+        viewModelScope.launch {
+            presentation.collect { pres ->
+                _slide.value = pres?.slides?.find { it.index == slideIndex }
             }
+        }
     }
 
     fun selectObject(id: String?) { _selectedObjectId.value = id }
 
-    val selectedObject: SlideObject?
-        get() = _slide.value?.objects?.find { it.id == _selectedObjectId.value }
+    /**
+     * Renders the current slide's HTML with interactive=true so the JS
+     * tap-to-select script is injected. Used by the WebView in the editor.
+     */
+    fun renderInteractiveSlide(slideIdx: Int): String {
+        val pres = presentation.value ?: return ""
+        val sld = pres.slides.getOrNull(slideIdx) ?: return ""
+        return htmlRenderer.render(sld, pres.palette, pres.typography, interactive = true)
+    }
 
     fun editObjectWithAi(instruction: String) {
-        val slide = _slide.value ?: return
+        val sld = slide.value ?: return
         val objId = _selectedObjectId.value ?: return
-        val target = slide.objects.find { it.id == objId } ?: return
+        val target = sld.objects.find { it.id == objId } ?: return
         _aiLoading.value = true
         _aiError.value = null
         viewModelScope.launch {
-            editObjectUseCase(projectId, slide, target, instruction)
+            editObjectUseCase(projectId, sld, target, instruction)
                 .onSuccess { explanation -> _aiExplanation.value = explanation }
                 .onFailure { e -> _aiError.value = e.message ?: "Error desconocido" }
             _aiLoading.value = false
@@ -117,7 +122,7 @@ class SlideEditorViewModel @Inject constructor(
         _imageLoading.value = true
         _aiError.value = null
         viewModelScope.launch {
-            generateImageUseCase(prompt, slide?.id ?: "")
+            generateImageUseCase(prompt, slide.value?.id ?: "")
                 .onSuccess { path -> addImage(path) }
                 .onFailure { e -> _aiError.value = e.message ?: "Error al generar imagen" }
             _imageLoading.value = false

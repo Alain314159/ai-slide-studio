@@ -92,6 +92,10 @@ class EditorViewModel @Inject constructor(
         viewModelScope.launch { projectRepository.deleteSlide(projectId, index) }
     }
 
+    fun moveSlide(fromIndex: Int, toIndex: Int) {
+        viewModelScope.launch { projectRepository.moveSlide(projectId, fromIndex, toIndex) }
+    }
+
     fun rename(title: String) {
         viewModelScope.launch { projectRepository.rename(projectId, title) }
     }

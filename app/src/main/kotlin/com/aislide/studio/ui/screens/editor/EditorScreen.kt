@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.IosShare
@@ -101,8 +103,11 @@ fun EditorScreenRoute(
                     slideIndex = slide.index,
                     slideTitle = slide.title.ifBlank { "Slide ${slide.index + 1}" },
                     thumbnailHtml = viewModel.renderThumbnail(slide.index),
+                    totalSlides = pres.slides.size,
                     onClick = { navController.navigate(Routes.slideEditor(projectId, slide.index)) },
-                    onDelete = { viewModel.deleteSlide(slide.index) }
+                    onDelete = { viewModel.deleteSlide(slide.index) },
+                    onMoveUp = { viewModel.moveSlide(slide.index, slide.index - 1) },
+                    onMoveDown = { viewModel.moveSlide(slide.index, slide.index + 1) }
                 )
             }
         }
@@ -114,8 +119,11 @@ private fun SlideCardRow(
     slideIndex: Int,
     slideTitle: String,
     thumbnailHtml: String,
+    totalSlides: Int,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
 ) {
     Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -137,6 +145,14 @@ private fun SlideCardRow(
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 2
                 )
+            }
+            Column {
+                IconButton(onClick = onMoveUp, enabled = slideIndex > 0) {
+                    Icon(Icons.Default.ArrowUpward, contentDescription = "Mover arriba")
+                }
+                IconButton(onClick = onMoveDown, enabled = slideIndex < totalSlides - 1) {
+                    Icon(Icons.Default.ArrowDownward, contentDescription = "Mover abajo")
+                }
             }
             IconButton(onClick = onClick) { Icon(Icons.Default.Edit, contentDescription = "Editar") }
             IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Eliminar") }

@@ -124,6 +124,20 @@ class ProjectRepository @Inject constructor(
         projectDao.updateSlideCount(projectId, remaining.size)
     }
 
+    /**
+     * Moves a slide from [fromIndex] to [toIndex] by swapping positions.
+     * Both slides get their slideIndex updated.
+     */
+    suspend fun moveSlide(projectId: Long, fromIndex: Int, toIndex: Int) {
+        val slides = slideDao.getByProject(projectId).sortedBy { it.slideIndex }
+        if (fromIndex !in slides.indices || toIndex !in slides.indices) return
+        val from = slides[fromIndex]
+        val to = slides[toIndex]
+        val now = System.currentTimeMillis()
+        slideDao.updateIndex(from.id, toIndex, now)
+        slideDao.updateIndex(to.id, fromIndex, now)
+    }
+
     // === Mappers ===
 
     private fun ProjectEntity.toPresentationLight(): Presentation =

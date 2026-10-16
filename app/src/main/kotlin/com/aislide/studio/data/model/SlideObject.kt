@@ -21,7 +21,7 @@ data class SlideObject(
     val bullets: List<String> = emptyList(),  // for bullet lists
     val imageUrl: String? = null,    // local path or remote URL
     val imageDescription: String? = null,
-    val position: ObjectPosition,
+    val position: ObjectPosition = ObjectPosition(0f, 0f, 1f, 0.2f),  // default top-left, full-width, 20% height
     val style: ObjectStyle = ObjectStyle.default(),
     val metadata: Map<String, String> = emptyMap()
 )

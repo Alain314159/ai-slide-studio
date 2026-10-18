@@ -1,5 +1,7 @@
 package com.aislide.studio.ui.screens.ai
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,15 +11,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,6 +41,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
@@ -46,10 +52,12 @@ import com.aislide.studio.ui.navigation.Routes
 @Composable
 fun AiGenerateScreenRoute(
     navController: NavHostController,
+    templateId: String?,
     viewModel: AiGenerateViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val prompt by viewModel.prompt.collectAsState()
+    val template = viewModel.template
 
     LaunchedEffect(state) {
         if (state is AiGenerateState.Success) {
@@ -83,6 +91,9 @@ fun AiGenerateScreenRoute(
                     prompt = prompt,
                     onPromptChange = viewModel::onPromptChange,
                     onGenerate = viewModel::generate,
+                    templateName = template?.name,
+                    templateEmoji = template?.previewEmoji,
+                    templatePalette = template?.palette,
                     modifier = Modifier.fillMaxSize()
                 )
                 is AiGenerateState.Loading -> LoadingView(s.message, Modifier.fillMaxSize())
@@ -92,7 +103,7 @@ fun AiGenerateScreenRoute(
                     onReset = viewModel::reset,
                     modifier = Modifier.fillMaxSize()
                 )
-                is AiGenerateState.Success -> Unit  // navigated away
+                is AiGenerateState.Success -> Unit
             }
         }
     }
@@ -103,6 +114,9 @@ private fun IdleView(
     prompt: String,
     onPromptChange: (String) -> Unit,
     onGenerate: () -> Unit,
+    templateName: String?,
+    templateEmoji: String?,
+    templatePalette: com.aislide.studio.data.model.Palette?,
     modifier: Modifier
 ) {
     val examplePrompts: List<String> = remember {
@@ -126,6 +140,17 @@ private fun IdleView(
             "Describe la presentación que necesitas",
             style = MaterialTheme.typography.headlineSmall
         )
+
+        // Show selected template banner (if any)
+        if (templateName != null && templatePalette != null) {
+            TemplateBanner(
+                name = templateName,
+                emoji = templateEmoji ?: "🎨",
+                palette = templatePalette,
+                onRemove = { onPromptChange(prompt) }  // keep prompt text, just visual
+            )
+        }
+
         OutlinedTextField(
             value = prompt,
             onValueChange = onPromptChange,
@@ -136,7 +161,6 @@ private fun IdleView(
         )
 
         Text("O elige un ejemplo:", style = MaterialTheme.typography.bodyMedium)
-        // Horizontal scrollable list of example prompt chips
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
@@ -158,7 +182,50 @@ private fun IdleView(
             onClick = onGenerate,
             enabled = prompt.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("Generar presentación") }
+        ) {
+            Icon(Icons.Default.AutoAwesome, contentDescription = null)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Generar presentación")
+        }
+    }
+}
+
+@Composable
+private fun TemplateBanner(
+    name: String,
+    emoji: String,
+    palette: com.aislide.studio.data.model.Palette,
+    onRemove: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(emoji, style = MaterialTheme.typography.headlineMedium)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Plantilla seleccionada", style = MaterialTheme.typography.labelSmall)
+                Text(name, style = MaterialTheme.typography.titleSmall)
+            }
+            // Palette swatches
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf(palette.primary, palette.secondary, palette.accent, palette.background).forEach { hex ->
+                    val color = runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(Color.Gray)
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(color)
+                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                    )
+                }
+            }
+        }
     }
 }
 

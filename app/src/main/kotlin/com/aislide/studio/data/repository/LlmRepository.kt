@@ -42,20 +42,34 @@ class LlmRepository @Inject constructor(
 
     /**
      * Generates a complete presentation from a free-text description.
-     * Returns the structured JSON the LLM produced.
+     * If [template] is provided, its promptHint is prepended to the user prompt
+     * so the LLM follows the template's vibe. The app still applies the
+     * template's palette/typography at render time (overriding what the LLM
+     * returns for those fields).
      */
-    suspend fun generatePresentation(prompt: String): PresentationDto {
+    suspend fun generatePresentation(
+        prompt: String,
+        template: com.aislide.studio.data.model.PresentationTemplate? = null
+    ): PresentationDto {
         val cfg = resolve()
+        val userPrompt = if (template != null) {
+            buildString {
+                appendLine("User request: $prompt")
+                appendLine()
+                appendLine("Template style: ${template.name}")
+                appendLine("Template category: ${template.category}")
+                appendLine("Style guidance: ${template.promptHint}")
+            }
+        } else {
+            prompt
+        }
         val request = ChatRequest(
             model = cfg.model,
             responseFormat = com.aislide.studio.data.remote.dto.ResponseFormat(type = "json_object"),
             temperature = 0.8,
             messages = listOf(
-                ChatMessage(
-                    role = "system",
-                    content = GENERATION_SYSTEM_PROMPT
-                ),
-                ChatMessage(role = "user", content = prompt)
+                ChatMessage(role = "system", content = GENERATION_SYSTEM_PROMPT),
+                ChatMessage(role = "user", content = userPrompt)
             )
         )
         val raw = apiService.chatText(cfg.endpoint, cfg.apiKey, request)

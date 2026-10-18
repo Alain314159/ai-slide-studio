@@ -17,9 +17,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Style
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -125,51 +127,79 @@ fun HomeScreenRoute(
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (filteredProjects.isEmpty() && !importing && searchQuery.isBlank()) {
-                EmptyState(modifier = Modifier.fillMaxSize())
-            } else if (filteredProjects.isEmpty() && searchQuery.isNotBlank()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Sin resultados para \"$searchQuery\"", style = MaterialTheme.typography.bodyLarge)
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Plantillas button (Canva-style quick access)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { navController.navigate(Routes.TEMPLATES) },
+                    modifier = Modifier.weight(1f)
                 ) {
-                    if (importing) {
-                        item { Text("Importando .pptx…", style = MaterialTheme.typography.bodyMedium) }
-                    }
-                    items(filteredProjects, key = { it.id }) { project ->
-                        ProjectCard(
-                            project = project,
-                            onClick = { navController.navigate(Routes.editor(project.id)) },
-                            onDelete = { viewModel.deleteProject(project.id) },
-                            onRename = { showRenameDialog = project.id }
-                        )
-                    }
+                    Icon(Icons.Default.Style, contentDescription = null)
+                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                    Text("Plantillas")
+                }
+                Button(
+                    onClick = { navController.navigate(Routes.AI_GENERATE) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null)
+                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                    Text("Nueva con IA")
                 }
             }
-            error?.let { err ->
-                Card(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp),
-                    colors = androidx.compose.material3.CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+
+            // Project list / empty state / loading
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (filteredProjects.isEmpty() && !importing && searchQuery.isBlank()) {
+                    EmptyState(modifier = Modifier.fillMaxSize())
+                } else if (filteredProjects.isEmpty() && searchQuery.isNotBlank()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Sin resultados para \"$searchQuery\"", style = MaterialTheme.typography.bodyLarge)
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(err, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
-                        TextButton(onClick = viewModel::clearError) { Text("OK") }
+                        if (importing) {
+                            item { Text("Importando .pptx…", style = MaterialTheme.typography.bodyMedium) }
+                        }
+                        items(filteredProjects, key = { it.id }) { project ->
+                            ProjectCard(
+                                project = project,
+                                onClick = { navController.navigate(Routes.editor(project.id)) },
+                                onDelete = { viewModel.deleteProject(project.id) },
+                                onRename = { showRenameDialog = project.id }
+                            )
+                        }
+                    }
+                }
+                error?.let { err ->
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(err, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                            TextButton(onClick = viewModel::clearError) { Text("OK") }
+                        }
                     }
                 }
             }
-        }
-    }
+        }  // end of Column
+    }  // end of Scaffold content lambda
 
     val dialogId = showRenameDialog
     if (dialogId != null) {

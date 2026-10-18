@@ -11,6 +11,8 @@ import androidx.navigation.navArgument
 object Routes {
     const val HOME = "home"
     const val AI_GENERATE = "ai_generate"
+    const val AI_GENERATE_WITH_TEMPLATE = "ai_generate/{templateId}"
+    const val TEMPLATES = "templates"
     const val EDITOR = "editor/{projectId}"
     const val SLIDE_EDITOR = "slide_editor/{projectId}/{slideIndex}"
     const val SETTINGS = "settings"
@@ -21,6 +23,7 @@ object Routes {
     fun slideEditor(projectId: Long, slideIndex: Int) = "slide_editor/$projectId/$slideIndex"
     fun export(projectId: Long) = "export/$projectId"
     fun presentation(projectId: Long, initial: Int = 0) = "presentation/$projectId?initial=$initial"
+    fun aiGenerateWithTemplate(templateId: String) = "ai_generate/$templateId"
 }
 
 @Composable
@@ -32,7 +35,22 @@ fun AppNavigation() {
             com.aislide.studio.ui.screens.home.HomeScreenRoute(navController)
         }
         composable(Routes.AI_GENERATE) {
-            com.aislide.studio.ui.screens.ai.AiGenerateScreenRoute(navController)
+            com.aislide.studio.ui.screens.ai.AiGenerateScreenRoute(navController, templateId = null)
+        }
+        composable(
+            route = Routes.AI_GENERATE_WITH_TEMPLATE,
+            arguments = listOf(navArgument("templateId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val templateId = backStackEntry.arguments?.getString("templateId")
+            com.aislide.studio.ui.screens.ai.AiGenerateScreenRoute(navController, templateId = templateId)
+        }
+        composable(Routes.TEMPLATES) {
+            com.aislide.studio.ui.screens.templates.TemplatesScreenRoute(
+                navController = navController,
+                onTemplateSelected = { template ->
+                    navController.navigate(Routes.aiGenerateWithTemplate(template.id))
+                }
+            )
         }
         composable(
             route = Routes.EDITOR,

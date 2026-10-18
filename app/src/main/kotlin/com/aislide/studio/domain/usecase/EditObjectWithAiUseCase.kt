@@ -36,6 +36,12 @@ class EditObjectWithAiUseCase @Inject constructor(
         target: SlideObject,
         instruction: String
     ): Result<String> = runCatching {
+        // Validate: target.id must exist in slide.objects
+        // (prevents silently applying no-op edits if the object was deleted by another coroutine)
+        if (slide.objects.none { it.id == target.id }) {
+            throw IllegalStateException("Target object ${target.id} not found in slide ${slide.id}")
+        }
+
         // Snapshot for undo
         history.get(slide.id).push(slide)
 

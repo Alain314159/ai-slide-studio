@@ -32,7 +32,11 @@ class HistoryManager<T> @Inject constructor() {
     /**
      * Push a snapshot. The current value should be pushed BEFORE applying a
      * change, so [undo] returns to the previous state.
+     *
+     * Thread-safe: synchronized to prevent concurrent corruption of the
+     * underlying ArrayDeque (which is NOT thread-safe by default).
      */
+    @Synchronized
     fun push(snapshot: T) {
         // Skip if same as last
         val last = undoStack.peekLast()
@@ -46,6 +50,7 @@ class HistoryManager<T> @Inject constructor() {
      * Pops the last snapshot (returns to the previous state).
      * Pass the CURRENT state so we can push it to redo.
      */
+    @Synchronized
     fun undo(current: T): T? {
         if (!canUndo) return null
         val previous = undoStack.removeLast()
@@ -56,6 +61,7 @@ class HistoryManager<T> @Inject constructor() {
     /**
      * Re-applies the last undone change. Pass CURRENT so we can push to undo.
      */
+    @Synchronized
     fun redo(current: T): T? {
         if (!canRedo) return null
         val next = redoStack.removeLast()
@@ -63,10 +69,17 @@ class HistoryManager<T> @Inject constructor() {
         return next
     }
 
+    @Synchronized
     fun clear() {
         undoStack.clear()
         redoStack.clear()
     }
+
+    @Synchronized
+    fun snapshotSize(): Int = undoStack.size
+
+    @Synchronized
+    fun redoSize(): Int = redoStack.size
 }
 
 /**
@@ -77,10 +90,13 @@ class HistoryManager<T> @Inject constructor() {
 class SlideHistoryManager @Inject constructor() {
 
     private val perSlide: MutableMap<String, HistoryManager<com.aislide.studio.data.model.Slide>> = mutableMapOf()
+    private val lock = Any()
 
+    @Synchronized
     fun get(slideId: String): HistoryManager<com.aislide.studio.data.model.Slide> =
         perSlide.getOrPut(slideId) { HistoryManager() }
 
+    @Synchronized
     fun clearFor(slideId: String) {
         perSlide.remove(slideId)
     }

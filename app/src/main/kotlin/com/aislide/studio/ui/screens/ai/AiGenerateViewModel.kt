@@ -1,7 +1,10 @@
 package com.aislide.studio.ui.screens.ai
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aislide.studio.data.model.PresentationTemplate
+import com.aislide.studio.data.model.PresentationTemplates
 import com.aislide.studio.data.repository.LlmRepository
 import com.aislide.studio.domain.usecase.GeneratePresentationUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,13 +16,18 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AiGenerateViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val generateUseCase: GeneratePresentationUseCase
 ) : ViewModel() {
+
+    val templateId: String? = savedStateHandle["templateId"]
+
+    val template: PresentationTemplate? = templateId?.let { PresentationTemplates.byId(it) }
 
     private val _state = MutableStateFlow<AiGenerateState>(AiGenerateState.Idle)
     val state: StateFlow<AiGenerateState> = _state.asStateFlow()
 
-    private val _prompt = MutableStateFlow("")
+    private val _prompt = MutableStateFlow(template?.promptHint ?: "")
     val prompt: StateFlow<String> = _prompt.asStateFlow()
 
     fun onPromptChange(value: String) {
@@ -31,7 +39,7 @@ class AiGenerateViewModel @Inject constructor(
         if (promptValue.isBlank()) return
         viewModelScope.launch {
             _state.value = AiGenerateState.Loading()
-            generateUseCase(promptValue)
+            generateUseCase(promptValue, template)
                 .onSuccess { projectId -> _state.value = AiGenerateState.Success(projectId) }
                 .onFailure { e ->
                     _state.value = AiGenerateState.Error(e.message ?: "Error desconocido")

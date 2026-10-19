@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Splash theme (Android 12+ API) -->
     <style name="Theme.AiSlideStudio.SplashTheme" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/brand_background</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
         <item name="postSplashScreenTheme">@style/Theme.AiSlideStudio</item>
     </style>
 
-    <!-- Base application theme -->
     <style name="Theme.AiSlideStudio" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@color/brand_background</item>
         <item name="android:navigationBarColor">@color/brand_background</item>

@@ -22,6 +22,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: editor/pptist/package-lock.json
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
@@ -32,7 +39,7 @@ jobs:
         with:
           gradle-version: 8.10.2
 
-      - name: Generate Gradle wrapper (we don't commit the .jar)
+      - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.10.2 --distribution-type bin
 
       - name: Cache Gradle dependencies
@@ -45,8 +52,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build debug APK (compile + check)
-        run: ./gradlew assembleDebug --no-daemon --stacktrace --warning-mode all
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: editor/pptist/node_modules
+          key: ${{ runner.os }}-npm-${{ hashFiles('editor/pptist/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Build PPTist editor (Vue → dist → assets)
+        run: ./scripts/build_pptist.sh
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
@@ -57,16 +75,6 @@ jobs:
         with:
           name: app-debug-apk
           path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: |
-            app/build/reports/tests/
-            app/build/test-results/
           if-no-files-found: warn
 
       - name: Upload build reports on failure

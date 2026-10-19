@@ -1,64 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AI Slide Studio</string>
-
-    <!-- Home screen -->
-    <string name="home_title">Mis Presentaciones</string>
-    <string name="home_new_project">Nueva Presentación</string>
-    <string name="home_import_pptx">Importar PowerPoint</string>
-    <string name="home_empty_state">Aún no tienes presentaciones.\nCrea una con IA o importa un .pptx existente.</string>
-    <string name="home_project_count">%d slides</string>
-    <string name="home_delete_project">Eliminar</string>
-    <string name="home_duplicate_project">Duplicar</string>
-    <string name="home_rename_project">Renombrar</string>
-
-    <!-- AI Generation screen -->
-    <string name="ai_generate_title">Crear con IA</string>
-    <string name="ai_generate_hint">Describe tu presentación…\n\nEj: "Presentación sobre la fotosíntesis para 7mo grado, 8 slides, tono educativo con ejemplos de la vida real"</string>
-    <string name="ai_generate_button">Generar presentación</string>
-    <string name="ai_generate_loading">La IA está creando tu presentación…</string>
-    <string name="ai_generate_regenerate">Volver a generar</string>
-    <string name="ai_generate_error">No se pudo generar. Verifica tu conexión y tu API key en Ajustes.</string>
-
-    <!-- Editor screen -->
-    <string name="editor_title">Editor</string>
-    <string name="editor_add_slide">Añadir slide</string>
-    <string name="editor_duplicate_slide">Duplicar slide</string>
-    <string name="editor_delete_slide">Eliminar slide</string>
-    <string name="editor_export">Exportar</string>
-    <string name="editor_play_present">Presentar</string>
-    <string name="editor_save">Guardar</string>
-    <string name="editor_undo">Deshacer</string>
-    <string name="editor_redo">Rehacer</string>
-
-    <!-- Slide Editor -->
-    <string name="slide_editor_edit_manual">Editar manual</string>
-    <string name="slide_editor_edit_ai">Editar con IA</string>
-    <string name="slide_editor_ai_hint">Describe qué quieres cambiar…</string>
-    <string name="slide_editor_ai_apply">Aplicar</string>
-    <string name="slide_editor_ai_variants">Generar 3 variantes</string>
-
-    <!-- Settings -->
-    <string name="settings_title">Ajustes</string>
-    <string name="settings_api_key">API Key</string>
-    <string name="settings_api_provider">Proveedor de IA</string>
-    <string name="settings_api_endpoint">Endpoint (URL base)</string>
-    <string name="settings_model">Modelo</string>
-    <string name="settings_about">Acerca de</string>
-    <string name="settings_about_text">AI Slide Studio v0.1.0\nCreador de presentaciones con IA\nUso personal</string>
-
-    <!-- Export -->
-    <string name="export_title">Exportar presentación</string>
-    <string name="export_mode_editable">PPTX editable (texto seleccionable)</string>
-    <string name="export_mode_vector">PPTX visual (calidad perfecta)</string>
-    <string name="export_button">Exportar</string>
-    <string name="export_done">Exportado correctamente</string>
-
-    <!-- Common -->
-    <string name="common_cancel">Cancelar</string>
-    <string name="common_ok">OK</string>
-    <string name="common_save">Guardar</string>
-    <string name="common_delete">Eliminar</string>
-    <string name="common_loading">Cargando…</string>
-    <string name="common_error">Error</string>
+    <string name="loading_editor">Cargando editor…</string>
+    <string name="error_editor_load">No se pudo cargar el editor. Verifica la instalación.</string>
 </resources>

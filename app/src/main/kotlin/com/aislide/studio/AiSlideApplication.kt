@@ -5,27 +5,27 @@ import dagger.hilt.android.HiltAndroidApp
 import timber.log.Timber
 
 /**
- * Application class for AI Slide Studio.
+ * AI Slide Studio Application.
  *
- * Personal-use, offline-first Android app for creating presentations with AI.
- * Uses Hilt for DI (Rule of android skill: di_framework=hilt).
+ * Architecture v2 (PPTist-fork based):
+ * - WebView (PPTist Vue.js editor) → Kotlin native bridge
+ * - Kotlin handles: LLM API, persistence, native UI chrome
+ * - PPTist handles: visual slide editing (drag-drop, charts, tables, etc.)
  *
- * SECURITY NOTE (Rule 7 of android skill): Nothing in the APK is a secret.
- * The LLM API key is NOT shipped in BuildConfig or strings.xml — it's provided
- * by the user in Settings and stored in DataStore (encrypted user-preferences).
+ * Workflow:
+ * 1. User opens editor → Kotlin loads PPTist in WebView
+ * 2. User edits slides visually in PPTist
+ * 3. PPTist emits events → Kotlin bridge receives them
+ * 4. User taps "Generate with AI" → Kotlin calls LLM → injects JSON into PPTist
+ * 5. User taps "Export PPTX" → PPTist generates via pptxgenjs → Kotlin saves via SAF
  */
 @HiltAndroidApp
 class AiSlideApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        setupTimber()
-    }
-
-    private fun setupTimber() {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
-        // Production crash reporting: integrate Play Vitals in a future phase.
     }
 }

@@ -49,10 +49,13 @@ echo "Node version: $NODE_VERSION"
 echo ""
 
 # 3. Install dependencies (cached if package-lock.json unchanged)
+# Note: we use --ignore-scripts to skip the husky prepare hook which
+# fails because we don't have a .git directory inside the PPTist folder
+# (PPTist was vendored as source, not as a git submodule).
 cd "$PPTIST_DIR"
 if [ ! -d node_modules ]; then
     echo "=== Installing npm dependencies (this may take a few minutes) ==="
-    npm ci
+    npm ci --ignore-scripts
 else
     echo "=== node_modules already exists, skipping install ==="
 fi
